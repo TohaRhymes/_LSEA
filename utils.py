@@ -1,30 +1,40 @@
-from collections import defaultdict
+from collections import defaultdict, Counter
 import csv
 import os
 import subprocess
+import numpy as np
 
-def count_intervals(dict, genes):
+def count_intervals(dict, features, emit_raw=True):
     res = defaultdict(int)
+    explained_loci = []
     for name in dict.keys():
-        gene_list = dict[name]  # List of genes for a trait
-        interval_set = set()  # Count every interval once
-        for gene in genes:
-            if gene in gene_list:  # If gene belongs to the trait
+        feature_list = dict[name]  # List of genes for a trait
+        interval_dict = defaultdict(set)  # Count every interval once
+        for feature in features:
+            if feature in feature_list:  # If gene belongs to the trait
                 # Add every corresponding interval to set
-                for interval in genes[gene]:
-                    interval_set.add(int(interval))
-        res[name] = len(interval_set)
+                intervals = features[feature]
+                if len(intervals) == 1:
+                    target_interval = intervals[0]
+                else:
+                    target_interval = intervals[np.random.randint(len(intervals), size=1)[0]]
+                interval_dict[target_interval].add(feature)
+        if emit_raw:
+            res[name] = interval_dict
+        else:
+            res[name] = len(interval_dict)
     return res
 
 # Extract gene names that are in intersection
 def get_overlapping_features(path_to_bed, path_to_gene_file, out_file):
-    genes = defaultdict(list)  # Gene -> interval id
+    features = defaultdict(list)  # Gene -> interval id
     subprocess.call("bedtools intersect -a {0} -b {1} -loj > {2}".format(path_to_bed, path_to_gene_file, out_file), shell=True)
     with open(out_file, 'r', newline='') as inter:  # Our result of clumping (SNPs sets)
         my_reader = csv.reader(inter, delimiter='\t')
         for row in my_reader:
-            genes[row[-1]].append(row[3])
-    return genes
+            interval_name = f'{row[0]}:{row[1]}-{row[2]}'
+            features[row[-1]].append(interval_name)
+    return features
 
 def get_snp_locations(tsv_file):
     input_dict = defaultdict(list)
