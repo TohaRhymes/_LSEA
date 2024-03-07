@@ -173,6 +173,7 @@ if __name__ == '__main__':
         with open(f'./{out_name}/features.bed', 'w') as feature_file:
             for feature in universe["features"]:
                 bed_line = '\t'.join(universe["features"][feature])
+                bed_line = bed_line.replace('chr', '')
                 feature_file.write(f'{bed_line}\n')
         interval_counts_for_universe = universe["interval_counts"]
         print(f'INFO\tUniverse stats:')
@@ -181,7 +182,7 @@ if __name__ == '__main__':
         print(f'\tfeature sets in universe = {len(universe["gene_set_dict"])}')
 
         stats_file = open(f"./{out_name}/annotation_stats_{universe_name}.tsv", 'w')
-        print('p_cutoff\tnum_loci\tannotated_loci\tunambiguoug_annotations\tsignificant_hits\tmin_qval', file=stats_file)
+        print('p_cutoff\tnum_loci\tannotated_loci\tunambiguous_annotations\tsignificant_hits\tmin_qval', file=stats_file)
 
         for p_cutoff in p_cutoffs:
             print(f'INFO\tCalculating enrichment with p-value cutoff = {p_cutoff}')

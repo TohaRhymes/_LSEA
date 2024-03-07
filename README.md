@@ -1,4 +1,4 @@
-# LSEA v0.2.3
+# LSEA v0.2.4
 
 *This is a new version of the tool that is now being extensively benchmarked. Please note that this is a development repository. Please use the contents of this repository with caution*
 

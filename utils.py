@@ -8,20 +8,26 @@ def count_intervals(dict, features, emit_raw=True):
     res = defaultdict(int)
     explained_loci = []
     for name in dict.keys():
+        int_count = 0
         feature_list = dict[name]  # List of genes for a trait
         interval_dict = defaultdict(set)  # Count every interval once
         for feature in features:
             if feature in feature_list:  # If gene belongs to the trait
                 # Add every corresponding interval to set
                 intervals = features[feature]
+                int_count += len(intervals)
                 if len(intervals) == 1:
                     target_interval = intervals[0]
+                    interval_dict[target_interval].add(feature)
                 else:
-                    target_interval = intervals[np.random.randint(len(intervals), size=1)[0]]
-                interval_dict[target_interval].add(feature)
+                    for tg_int in intervals:
+                        interval_dict[tg_int].add(feature)
+#                    target_interval = intervals[np.random.randint(len(intervals), size=1)[0]]
+#                interval_dict[target_interval].add(feature)
         if emit_raw:
             res[name] = interval_dict
         else:
+#            res[name] = int_count
             res[name] = len(interval_dict)
     return res
 

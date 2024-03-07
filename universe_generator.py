@@ -2,10 +2,11 @@ import argparse
 import sys
 import csv
 import json
+import subprocess
 from utils import get_snp_locations, get_overlapping_features, count_intervals, get_features_from_dir, read_features, read_gmt
 
 def create_universe(dict, interval):
-    with open("./universe.bed", 'w', newline='') as bed_file:  # Here we write to new file
+    with open("./tmp.bed", 'w', newline='') as bed_file:  # Here we write to new file
         my_writer = csv.writer(bed_file, delimiter='\t')
         id = 1
         for snp in dict:
@@ -16,6 +17,7 @@ def create_universe(dict, interval):
                        int(info[1]) + interval, id]
             id += 1
             my_writer.writerow(bed_row)
+        subprocess.call("sort -k1,1 -k2,2n tmp.bed > universe.bed", shell=True)
 
 
 if __name__ == '__main__':
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     input_dict = get_snp_locations(variants)
     create_universe(input_dict, interval)
     features_in_universe = get_overlapping_features("./universe.bed", bed, "inter2.tsv")
-    interval_counts_for_universe = count_intervals(gene_set_dict, features_in_universe)
+    interval_counts_for_universe = count_intervals(gene_set_dict, features_in_universe, emit_raw=False)
 
     feature_dict = read_features(bed)
     out_dict = {"interval": interval,
