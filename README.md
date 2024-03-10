@@ -6,7 +6,7 @@
 - plink v1.9
 - bedtools
 - scipy for Python3
-- rpy2 for Python3
+- statsmodels for Python3
 
 ## Usage
 

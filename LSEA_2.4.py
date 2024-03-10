@@ -10,8 +10,11 @@ import shutil
 from collections import defaultdict
 from typing import Counter
 from scipy.stats import hypergeom
-from rpy2 import robjects
 from utils import get_overlapping_features, count_intervals
+from statsmodels.stats.multitest import fdrcorrection
+
+
+
 
 
 def tsv_len(tsv_file):
@@ -107,16 +110,8 @@ def make_bed_file(clumped_file, interval, out_name):
 def p_val_for_gene_set(n_big, k_big, n, k):
     return hypergeom.sf(k, n_big, k_big, n)
 
-
-def calcuate_qvals(pvals):
-    x = robjects.r('''
-            f <- function(pvals) {
-                p.adjust(pvals, method = "fdr")
-            }
-            ''')
-    r_f = robjects.globalenv['f']
-    v = robjects.FloatVector(pvals)
-    return list(r_f(v))
+def calculate_qvals(pvals):
+    return list(fdrcorrection(pvals)[1])
 
 
 if __name__ == '__main__':
