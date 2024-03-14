@@ -5,7 +5,12 @@ import sys
 import csv
 import json
 import subprocess
-from utils import get_snp_locations, get_overlapping_features, count_intervals, get_features_from_dir, read_features, read_gmt
+from utils import get_snp_locations, get_overlapping_features, count_intervals, get_features_from_dir, read_features, read_gmt, log_message
+
+import time
+
+def current_milli_time():
+    return round(time.time() * 1000)
 
 def create_universe(dict, interval):
     with open("./tmp.bed", 'w', newline='') as bed_file:  # Here we write to new file
@@ -19,7 +24,7 @@ def create_universe(dict, interval):
                        int(info[1]) + interval, id]
             id += 1
             my_writer.writerow(bed_row)
-        subprocess.call("sort -k1,1 -k2,2n tmp.bed > universe.bed", shell=True)
+    subprocess.call("sort -k1,1 -k2,2n tmp.bed > universe.bed", shell=True)
 
 
 if __name__ == '__main__':
@@ -35,6 +40,9 @@ if __name__ == '__main__':
                         metavar='path', type=str)
     parser.add_argument('-o', help='Output path for json',
                         metavar='path', type=str, required=True)
+    
+    log_message("Processing input")
+    
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
@@ -50,11 +58,16 @@ if __name__ == '__main__':
         bed = 'features.bed'
     out_path = args.o
     
+    log_message("Getting SNPs locations")
     input_dict = get_snp_locations(variants)
+    log_message("Creating universe")
     create_universe(input_dict, interval)
+    log_message("Get overlaps")
     features_in_universe = get_overlapping_features("./universe.bed", bed, "inter2.tsv")
+    log_message("Count intervals")
     interval_counts_for_universe = count_intervals(gene_set_dict, features_in_universe, emit_raw=False)
 
+    log_message("Creating features file")
     feature_dict = read_features(bed)
     out_dict = {"interval": interval,
             "universe_intervals_number" : len(input_dict), 
@@ -62,6 +75,6 @@ if __name__ == '__main__':
             "gene_set_dict" : gene_set_dict,
             "features" : feature_dict}
 
-    base = open(out_path, "w")
-    json.dump(out_dict, base)
-    base.close()
+    with open(out_path, "w") as base:
+        json.dump(out_dict, base)
+    

@@ -10,25 +10,16 @@ import shutil
 from collections import defaultdict
 from typing import Counter
 from scipy.stats import hypergeom
-from utils import get_overlapping_features, count_intervals
+from utils import get_overlapping_features, count_intervals, log_message
 from statsmodels.stats.multitest import fdrcorrection
 
 
 
-
-
-def tsv_len(tsv_file):
-    with open(tsv_file) as f:
-        for i, l in enumerate(f):
-            pass
-    return i
-
-
 def run_plink(plink_path, bfile_path, tsv_file, input_dict, p, out_name):
 #    print('Calculating independent loci with PLINK')
-    tsv_plink = os.getcwd() + f"/{out_name}/" + \
+    tsv_plink = f"{out_name}/" + \
         tsv_file.split('/')[-1].split('.')[0] + '_for_plink.tsv'
-    out_plink = os.getcwd() + f"/{out_name}/" + \
+    out_plink = f"{out_name}/" + \
         tsv_file.split('/')[-1].split('.')[0]
     with open(tsv_plink, 'w', newline='') as csvfile:
         my_writer = csv.writer(csvfile, delimiter='\t')
@@ -38,8 +29,8 @@ def run_plink(plink_path, bfile_path, tsv_file, input_dict, p, out_name):
             # Only extract necessary info from dictionary corresponding to csv
             row = [snp] + input_dict[snp][0:3]
             my_writer.writerow(row)
-    subprocess.call('{0}/plink --bfile {1} --clump {2} --clump-field P --clump-p1 {3} --clump-p2 0.01 --clump-r2 0.1 --clump-snp-field SNP --clump-kb 500 --out {4} --allow-no-sex --allow-extra-chr \
-      2> {5}'.format(plink_path, bfile_path, tsv_plink, p, out_plink, f'./{out_name}/PLINK_clumping.log'), 
+    subprocess.call(f'{plink_path}/plink --bfile {bfile_path} --clump {tsv_plink} --clump-field P --clump-p1 {p} --clump-p2 0.01 --clump-r2 0.1 --clump-snp-field SNP --clump-kb 500 --out {out_plink} --allow-no-sex --allow-extra-chr \
+      2> {out_name}/PLINK_clumping.log', 
       shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 #    subprocess.call(f'md5sum {out_plink}.clumped', shell=True)
     return out_plink + ".clumped"
@@ -73,7 +64,7 @@ def get_snp_info(tsv_file, names):
 
 def make_bed_file(clumped_file, interval, out_name):
 #    print(f'Reading clumped file {clumped_file}')
-    with open(f"./{out_name}/clumps.bed", 'w', newline='') as bed_file:  # Here we write to new file
+    with open(f"{out_name}/clumps.bed", 'w', newline='') as bed_file:  # Here we write to new file
         my_writer = csv.writer(bed_file, delimiter='\t')
         with open(clumped_file, 'r') as cl_file:  # Our result of clumping (SNPs sets)
             my_reader = csv.reader(cl_file, delimiter='\t')
@@ -90,13 +81,13 @@ def make_bed_file(clumped_file, interval, out_name):
                     my_writer.writerow(bed_row)
     # Sort file
     subprocess.call(
-        f"bedtools sort -i ./{out_name}/clumps.bed > ./{out_name}/clumps_sorted.bed", shell=True)
+        f"bedtools sort -i {out_name}/clumps.bed > {out_name}/clumps_sorted.bed", shell=True)
     # Merge regions
     subprocess.call(
-        f"bedtools merge -i ./{out_name}/clumps_sorted.bed > ./{out_name}/merged.bed", shell=True)
-    with open(f"./{out_name}/merged_fixed_size.bed", 'w', newline='') as bed_file:  # Here we write to new file
+        f"bedtools merge -i {out_name}/clumps_sorted.bed > {out_name}/merged.bed", shell=True)
+    with open(f"{out_name}/merged_fixed_size.bed", 'w', newline='') as bed_file:  # Here we write to new file
         my_writer = csv.writer(bed_file, delimiter='\t', lineterminator='\n')
-        with open(f'./{out_name}/merged.bed', 'r', newline='') as inter:
+        with open(f'{out_name}/merged.bed', 'r', newline='') as inter:
             my_reader = csv.reader(inter, delimiter='\t')
             for row in my_reader:
                 middle_point = int(row[1]) + (int(row[2]) - int(row[1])) // 2
@@ -104,7 +95,8 @@ def make_bed_file(clumped_file, interval, out_name):
                 my_writer.writerow(new_row)
     # Add numeration to intervals
     subprocess.call(
-        "awk {'print $0\"\t\"FNR'}" + f" ./{out_name}/merged_fixed_size.bed > ./{out_name}/merged_with_line_numbers.bed", shell=True)
+        "awk {'print $0\"\t\"FNR'}" + f" {out_name}/merged_fixed_size.bed > {out_name}/merged_with_line_numbers.bed", shell=True)
+
 
 
 def p_val_for_gene_set(n_big, k_big, n, k):
@@ -113,6 +105,12 @@ def p_val_for_gene_set(n_big, k_big, n, k):
 def calculate_qvals(pvals):
     return list(fdrcorrection(pvals)[1])
 
+
+def count_lines(filename):
+    """Count the number of lines in a given file."""
+    with open(filename, 'r') as file:
+        line_count = sum(1 for line in file)
+    return line_count
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LSEA')
@@ -137,8 +135,7 @@ if __name__ == '__main__':
         parser.print_help(sys.stderr)
         sys.exit(1)
     args = parser.parse_args()
-    
-    print(f'INFO\tRunning LSEA with the following CMD: {" ".join(sys.argv[:])}')
+    log_message(f'Running LSEA with the following CMD: {" ".join(sys.argv)}')
     
     tsv_file = args.input
     path_to_plink_dir = args.plink_dir
@@ -152,40 +149,39 @@ if __name__ == '__main__':
     out_name = args.out
     if col_names is None:
         col_names = ["chr", "pos", "id", "p"]
-    print(f'INFO\tReading input file {tsv_file}...')
+    log_message(f'Reading input file {tsv_file}...')
     input_dict = get_snp_info(tsv_file, col_names)
 
-    if os.path.exists(f'./{out_name}'):
-        print(f'WARN\tOutput diretory {out_name} exists, removing...')
-        shutil.rmtree(f'./{out_name}')
-    os.makedirs(f'./{out_name}')
+    if os.path.exists(out_name):
+        log_message(f'Output diretory {out_name} exists, writing there...', msg_type="WARN")
+#         shutil.rmtree(out_name)
+    else:
+        log_message(f'Creating directory {out_name} and writing there...', msg_type="WARN")
+        os.makedirs(out_name)
 
     for universe_file in json_files:
         universe_name = os.path.basename(universe_file).replace('.json', '')
-        print(f'INFO\tProcessing universe {universe_name}')
+        log_message(f'Processing universe {universe_name}')
         universe= json.load(open(universe_file, "r"))
         interval = universe["interval"]
-        with open(f'./{out_name}/features.bed', 'w') as feature_file:
+        with open(f'{out_name}/features.bed', 'w') as feature_file:
             for feature in universe["features"]:
                 bed_line = '\t'.join(universe["features"][feature])
                 bed_line = bed_line.replace('chr', '')
                 feature_file.write(f'{bed_line}\n')
         interval_counts_for_universe = universe["interval_counts"]
-        print(f'INFO\tUniverse stats:')
-        print(f'\tinterval size = {interval};\n\tinterval count = {universe["universe_intervals_number"]};')
-        print(f'\ttotal number of features = {len(universe["features"])};')
-        print(f'\tfeature sets in universe = {len(universe["gene_set_dict"])}')
+        log_message(f"""Universe stats:\n\tinterval size = {interval};\n\tinterval count = {universe["universe_intervals_number"]};\n\ttotal number of features = {len(universe["features"])};\n\tfeature sets in universe = {len(universe["gene_set_dict"])}""")
 
-        stats_file = open(f"./{out_name}/annotation_stats_{universe_name}.tsv", 'w')
+        stats_file = open(f"{out_name}/annotation_stats_{universe_name}.tsv", 'w')
         print('p_cutoff\tnum_loci\tannotated_loci\tunambiguous_annotations\tsignificant_hits\tmin_qval', file=stats_file)
 
         for p_cutoff in p_cutoffs:
-            print(f'INFO\tCalculating enrichment with p-value cutoff = {p_cutoff}')
+            log_message(f'Calculating enrichment with p-value cutoff = {p_cutoff}')
             clumped_file = run_plink(path_to_plink_dir, path_to_bfile, tsv_file, input_dict, p_cutoff, out_name)
             make_bed_file(clumped_file, interval, out_name)
-            n_intervals = sum(1 for line in open(f'./{out_name}/merged_with_line_numbers.bed'))
-            target_features = get_overlapping_features(f"./{out_name}/merged_with_line_numbers.bed", 
-                        f'./{out_name}/features.bed', f"./{out_name}/inter.tsv")    
+            n_intervals = count_lines(f'{out_name}/merged_with_line_numbers.bed')
+            target_features = get_overlapping_features(f"{out_name}/merged_with_line_numbers.bed", 
+                        f'{out_name}/features.bed', f"{out_name}/inter.tsv")    
             feature_set = universe["gene_set_dict"]
             interval_counts = count_intervals(feature_set, target_features)
 
@@ -193,9 +189,9 @@ if __name__ == '__main__':
             for w in sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True):
                 pvals.append(p_val_for_gene_set(universe["universe_intervals_number"], 
                     interval_counts_for_universe[w], n_intervals, len(interval_counts[w])))
-            qvals = calcuate_qvals(pvals)
+            qvals = calculate_qvals(pvals)
 
-            with open(f"./{out_name}/{universe_name}_result_{p_cutoff}.tsv", 'w', newline='') as file:
+            with open(f"{out_name}/{universe_name}_result_{p_cutoff}.tsv", 'w', newline='') as file:
                 explained_loci = set()
                 feature_names = defaultdict(set)
                 hit_count = 0

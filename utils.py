@@ -4,6 +4,8 @@ import os
 import subprocess
 import numpy as np
 
+from datetime import datetime
+
 def count_intervals(dict, features, emit_raw=True):
     res = defaultdict(int)
     explained_loci = []
@@ -42,17 +44,20 @@ def get_overlapping_features(path_to_bed, path_to_gene_file, out_file):
             features[row[-1]].append(interval_name)
     return features
 
+
+# todo with-without header, any order
 def get_snp_locations(tsv_file):
     input_dict = defaultdict(list)
     with open(tsv_file, 'r', newline='') as csvfile:  # Convert tsv to dictionary
         my_reader = csv.reader(csvfile, delimiter='\t')
-        first_row = list(next(my_reader))
+        cur_row = list(next(my_reader))
+        cur_row = list(next(my_reader))
         try:  # We find necessary indices from header
-            chrom = first_row[0]
-            pos = int(first_row[1])
-            variant_id = first_row[2]
+            chrom = cur_row[0]
+            pos = int(cur_row[1])
+            variant_id = cur_row[2]
         except ValueError:
-            print("Check that your tsv file has no headers and the format is correct!")
+            print(f"Problem with: {cur_row}\nCheck that your tsv file has no headers and the format is correct!")
             exit(1)
         input_dict[variant_id] = (chrom, pos)
         for row in my_reader:  # Start from second row
@@ -93,3 +98,12 @@ def read_features(path):
     for feature in features:
         feature_dict[feature[3]] = feature
     return feature_dict
+
+
+def log_message(msg, msg_type="INFO"):
+    # Get current date and time
+    now = datetime.now()
+    # Format the current date and time
+    formatted_now = now.strftime("%Y-%m-%d %H:%M:%S")
+    # Log the message with date and time
+    print(f"[{msg_type} {formatted_now}] {msg}")
