@@ -100,7 +100,7 @@ def make_bed_file(clumped_file, interval, out_name):
 
 
 def p_val_for_gene_set(n_big, k_big, n, k):
-    return hypergeom.sf(k, n_big, k_big, n)
+    return hypergeom.sf(k-1, n_big, k_big, n)
 
 def calculate_qvals(pvals):
     return list(fdrcorrection(pvals)[1])
