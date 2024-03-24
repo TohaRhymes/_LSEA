@@ -6,6 +6,7 @@ import numpy as np
 
 from datetime import datetime
 
+
 def count_intervals(dict, features, emit_raw=True):
     res = defaultdict(int)
     explained_loci = []
@@ -24,19 +25,21 @@ def count_intervals(dict, features, emit_raw=True):
                 else:
                     for tg_int in intervals:
                         interval_dict[tg_int].add(feature)
-#                    target_interval = intervals[np.random.randint(len(intervals), size=1)[0]]
-#                interval_dict[target_interval].add(feature)
+            #     target_interval = intervals[np.random.randint(len(intervals), size=1)[0]]
+            # interval_dict[target_interval].add(feature)
         if emit_raw:
             res[name] = interval_dict
         else:
-#            res[name] = int_count
+            # res[name] = int_count
             res[name] = len(interval_dict)
     return res
+
 
 # Extract gene names that are in intersection
 def get_overlapping_features(path_to_bed, path_to_gene_file, out_file):
     features = defaultdict(list)  # Gene -> interval id
-    subprocess.call("bedtools intersect -a {0} -b {1} -loj > {2}".format(path_to_bed, path_to_gene_file, out_file), shell=True)
+    subprocess.call("bedtools intersect -a {0} -b {1} -loj > {2}".format(path_to_bed, path_to_gene_file, out_file),
+                    shell=True)
     with open(out_file, 'r', newline='') as inter:  # Our result of clumping (SNPs sets)
         my_reader = csv.reader(inter, delimiter='\t')
         for row in my_reader:
@@ -74,6 +77,7 @@ def read_gmt(path):
                 d[row[0]].append(gene)
     return d
 
+
 def get_features_from_dir(path):
     file_set = [x for x in os.listdir(path) if x.endswith('.bed')]
     feature_set_dict = defaultdict(list)
@@ -89,6 +93,7 @@ def get_features_from_dir(path):
                 features_file.write(f'{elems[0]}\t{elems[1]}\t{elems[2]}\t{feature_name}\n')
                 feature_set_dict[set_name].append(feature_name)
     return feature_set_dict
+
 
 def read_features(path):
     feature_dict = defaultdict(list)

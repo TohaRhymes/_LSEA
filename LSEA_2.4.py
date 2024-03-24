@@ -14,13 +14,12 @@ from utils import get_overlapping_features, count_intervals, log_message
 from statsmodels.stats.multitest import fdrcorrection
 
 
-
 def run_plink(plink_path, bfile_path, tsv_file, input_dict, p, out_name):
-#    print('Calculating independent loci with PLINK')
+    # print('Calculating independent loci with PLINK')
     tsv_plink = f"{out_name}/" + \
-        tsv_file.split('/')[-1].split('.')[0] + '_for_plink.tsv'
+                tsv_file.split('/')[-1].split('.')[0] + '_for_plink.tsv'
     out_plink = f"{out_name}/" + \
-        tsv_file.split('/')[-1].split('.')[0]
+                tsv_file.split('/')[-1].split('.')[0]
     with open(tsv_plink, 'w', newline='') as csvfile:
         my_writer = csv.writer(csvfile, delimiter='\t')
         init_row = ["SNP", "Chr", "Pos", "P"]
@@ -29,10 +28,11 @@ def run_plink(plink_path, bfile_path, tsv_file, input_dict, p, out_name):
             # Only extract necessary info from dictionary corresponding to csv
             row = [snp] + input_dict[snp][0:3]
             my_writer.writerow(row)
-    subprocess.call(f'{plink_path}/plink --bfile {bfile_path} --clump {tsv_plink} --clump-field P --clump-p1 {p} --clump-p2 0.01 --clump-r2 0.1 --clump-snp-field SNP --clump-kb 500 --out {out_plink} --allow-no-sex --allow-extra-chr \
-      2> {out_name}/PLINK_clumping.log', 
-      shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-#    subprocess.call(f'md5sum {out_plink}.clumped', shell=True)
+    subprocess.call(
+        f'{plink_path}/plink --bfile {bfile_path} --clump {tsv_plink} --clump-field P --clump-p1 {p} --clump-p2 0.01 --clump-r2 0.1 --clump-snp-field SNP --clump-kb 500 --out {out_plink} --allow-no-sex --allow-extra-chr \
+      2> {out_name}/PLINK_clumping.log',
+        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # subprocess.call(f'md5sum {out_plink}.clumped', shell=True)
     return out_plink + ".clumped"
 
 
@@ -58,25 +58,25 @@ def get_snp_info(tsv_file, names):
             exit(1)
         for row in my_reader:  # Start from second row
             input_dict[row[id_index]] = [row[chr_index]] + \
-                [row[pos_index]] + [row[p_index]]  # Name -> Chromosome, pos, pval
+                                        [row[pos_index]] + [row[p_index]]  # Name -> Chromosome, pos, pval
     return input_dict
 
 
 def make_bed_file(clumped_file, interval, out_name):
-#    print(f'Reading clumped file {clumped_file}')
+    # print(f'Reading clumped file {clumped_file}')
     with open(f"{out_name}/clumps.bed", 'w', newline='') as bed_file:  # Here we write to new file
         my_writer = csv.writer(bed_file, delimiter='\t')
         with open(clumped_file, 'r') as cl_file:  # Our result of clumping (SNPs sets)
             my_reader = csv.reader(cl_file, delimiter='\t')
             for row in my_reader:
-#                print('Reading line')
+                # print('Reading line')
                 if len(row) != 0:
                     # What to do with NONE?
                     row = list(filter(lambda x: len(x) !=
-                                      0 and x != " ", row[0].split(" ")))
+                                                0 and x != " ", row[0].split(" ")))
                     if row[0] == "CHR":  # Skip first row
                         continue
-#                    print('Got here')
+                    # print('Got here')
                     bed_row = [row[0], max(int(row[3]) - interval, 0), int(row[3]) + interval]
                     my_writer.writerow(bed_row)
     # Sort file
@@ -95,12 +95,13 @@ def make_bed_file(clumped_file, interval, out_name):
                 my_writer.writerow(new_row)
     # Add numeration to intervals
     subprocess.call(
-        "awk {'print $0\"\t\"FNR'}" + f" {out_name}/merged_fixed_size.bed > {out_name}/merged_with_line_numbers.bed", shell=True)
-
+        "awk {'print $0\"\t\"FNR'}" + f" {out_name}/merged_fixed_size.bed > {out_name}/merged_with_line_numbers.bed",
+        shell=True)
 
 
 def p_val_for_gene_set(n_big, k_big, n, k):
-    return hypergeom.sf(k-1, n_big, k_big, n)
+    return hypergeom.sf(k - 1, n_big, k_big, n)
+
 
 def calculate_qvals(pvals):
     return list(fdrcorrection(pvals)[1])
@@ -112,23 +113,31 @@ def count_lines(filename):
         line_count = sum(1 for line in file)
     return line_count
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LSEA')
-    parser.add_argument('-input', help='Input file in TSV format. The file should contain at least four columns: chromosome name, variant position, variant ID, and GWAS p-value. The file MUST have a header row.', metavar='file',
+    parser.add_argument('-input',
+                        help='Input file in TSV format. The file should contain at least four columns: chromosome name, variant position, variant ID, and GWAS p-value. The file MUST have a header row.',
+                        metavar='file',
                         type=str, required=True)
-    parser.add_argument('-universe', help='JSON file with universe. Several universe files may be specified separated by space',
+    parser.add_argument('-universe',
+                        help='JSON file with universe. Several universe files may be specified separated by space',
                         metavar='path', nargs='+', type=str, required=True)
     parser.add_argument('-out', help='Relative path to output directory (Default: lsea_result). Will be created.',
                         metavar='name', type=str, required=False, default='lsea_result')
-    parser.add_argument('-p', help='p-value cutoff to be used when identifying associated loci. If not specified, optimal cutoff will be estimated using a regression model (at least -n and -m options should be given)',
+    parser.add_argument('-p',
+                        help='p-value cutoff to be used when identifying associated loci. If not specified, optimal cutoff will be estimated using a regression model (at least -n and -m options should be given)',
                         metavar='float', nargs='+', required=False, default=['1e-5', '5e-8'])
     parser.add_argument('-plink_dir', help='Path to a directory with PLINK executable', metavar='dir',
                         type=str, required=False)
-    parser.add_argument('-bfile', help='Genotypes in PLINK .bed format that will be used for LD-based clumping. Only file prefix should be given.', metavar='prefix',
+    parser.add_argument('-bfile',
+                        help='Genotypes in PLINK .bed format that will be used for LD-based clumping. Only file prefix should be given.',
+                        metavar='prefix',
                         type=str, required=False)
     parser.add_argument('-qval_threshold', help='Q-value threshold for output (Default: 0.1)',
                         metavar='float', type=float, required=False, default="0.1")
-    parser.add_argument('-column_names', help='Column names for input TSV. These names will be used if the column names do not match the default: chr, pos, id, p. Names should be given in the same order (chromosome, position, ID, p-value)',
+    parser.add_argument('-column_names',
+                        help='Column names for input TSV. These names will be used if the column names do not match the default: chr, pos, id, p. Names should be given in the same order (chromosome, position, ID, p-value)',
                         metavar='name', nargs=4, type=str, required=False)
 
     if len(sys.argv) == 1:
@@ -136,7 +145,7 @@ if __name__ == '__main__':
         sys.exit(1)
     args = parser.parse_args()
     log_message(f'Running LSEA with the following CMD: {" ".join(sys.argv)}')
-    
+
     tsv_file = args.input
     path_to_plink_dir = args.plink_dir
     if path_to_plink_dir is not None:
@@ -154,7 +163,7 @@ if __name__ == '__main__':
 
     if os.path.exists(out_name):
         log_message(f'Output diretory {out_name} exists, writing there...', msg_type="WARN")
-#         shutil.rmtree(out_name)
+        # shutil.rmtree(out_name)
     else:
         log_message(f'Creating directory {out_name} and writing there...', msg_type="WARN")
         os.makedirs(out_name)
@@ -162,7 +171,7 @@ if __name__ == '__main__':
     for universe_file in json_files:
         universe_name = os.path.basename(universe_file).replace('.json', '')
         log_message(f'Processing universe {universe_name}')
-        universe= json.load(open(universe_file, "r"))
+        universe = json.load(open(universe_file, "r"))
         interval = universe["interval"]
         with open(f'{out_name}/features.bed', 'w') as feature_file:
             for feature in universe["features"]:
@@ -170,25 +179,27 @@ if __name__ == '__main__':
                 bed_line = bed_line.replace('chr', '')
                 feature_file.write(f'{bed_line}\n')
         interval_counts_for_universe = universe["interval_counts"]
-        log_message(f"""Universe stats:\n\tinterval size = {interval};\n\tinterval count = {universe["universe_intervals_number"]};\n\ttotal number of features = {len(universe["features"])};\n\tfeature sets in universe = {len(universe["gene_set_dict"])}""")
+        log_message(
+            f"""Universe stats:\n\tinterval size = {interval};\n\tinterval count = {universe["universe_intervals_number"]};\n\ttotal number of features = {len(universe["features"])};\n\tfeature sets in universe = {len(universe["gene_set_dict"])}""")
 
         stats_file = open(f"{out_name}/annotation_stats_{universe_name}.tsv", 'w')
-        print('p_cutoff\tnum_loci\tannotated_loci\tunambiguous_annotations\tsignificant_hits\tmin_qval', file=stats_file)
+        print('p_cutoff\tnum_loci\tannotated_loci\tunambiguous_annotations\tsignificant_hits\tmin_qval',
+              file=stats_file)
 
         for p_cutoff in p_cutoffs:
             log_message(f'Calculating enrichment with p-value cutoff = {p_cutoff}')
             clumped_file = run_plink(path_to_plink_dir, path_to_bfile, tsv_file, input_dict, p_cutoff, out_name)
             make_bed_file(clumped_file, interval, out_name)
             n_intervals = count_lines(f'{out_name}/merged_with_line_numbers.bed')
-            target_features = get_overlapping_features(f"{out_name}/merged_with_line_numbers.bed", 
-                        f'{out_name}/features.bed', f"{out_name}/inter.tsv")    
+            target_features = get_overlapping_features(f"{out_name}/merged_with_line_numbers.bed",
+                                                       f'{out_name}/features.bed', f"{out_name}/inter.tsv")
             feature_set = universe["gene_set_dict"]
             interval_counts = count_intervals(feature_set, target_features)
 
             pvals = []
             for w in sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True):
-                pvals.append(p_val_for_gene_set(universe["universe_intervals_number"], 
-                    interval_counts_for_universe[w], n_intervals, len(interval_counts[w])))
+                pvals.append(p_val_for_gene_set(universe["universe_intervals_number"],
+                                                interval_counts_for_universe[w], n_intervals, len(interval_counts[w])))
             qvals = calculate_qvals(pvals)
 
             with open(f"{out_name}/{universe_name}_result_{p_cutoff}.tsv", 'w', newline='') as file:
@@ -198,7 +209,8 @@ if __name__ == '__main__':
                 min_qval = 1
                 my_writer = csv.writer(file, delimiter='\t')
                 my_writer.writerow(["Gene_set", "Overlapping_loci", "Description", "p-value", "q-value"])
-                for i, w in enumerate(sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
+                for i, w in enumerate(
+                        sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
                     if len(interval_counts[w]) >= 3 and qvals[i] <= qval_thresh:
                         min_qval = min(min_qval, qvals[i])
                         hit_count += 1
@@ -212,10 +224,12 @@ if __name__ == '__main__':
                 for _, feature_set in feature_names.items():
                     if len(feature_set) > 1:
                         expanded_set = sum([ftr.split(';') for ftr in feature_set], [])
-                        feature_freq = dict(Counter(expanded_set))
+                        feature_freq = dict(
+                            Counter(expanded_set))  # todo smth strange going on here (Counter from typings??????)
                         if max(feature_freq.values()) < len(feature_set):
                             ambiguous_loci += 1
                 unambiguous = len(explained_loci) - ambiguous_loci
-                print(f'{p_cutoff}\t{n_intervals}\t{len(explained_loci)}\t{unambiguous}\t{hit_count}\t{min_qval}', file=stats_file)
-        
+                print(f'{p_cutoff}\t{n_intervals}\t{len(explained_loci)}\t{unambiguous}\t{hit_count}\t{min_qval}',
+                      file=stats_file)
+
         stats_file.close()
