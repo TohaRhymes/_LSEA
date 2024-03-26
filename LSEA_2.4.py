@@ -10,7 +10,7 @@ import shutil
 from collections import defaultdict
 from typing import Counter
 from scipy.stats import hypergeom
-from utils import get_overlapping_features, count_intervals, log_message
+from utils import get_overlapping_features, count_intervals, log_message, check_and_create_dir
 from statsmodels.stats.multitest import fdrcorrection
 
 
@@ -29,8 +29,9 @@ def run_plink(plink_path, bfile_path, tsv_file, input_dict, p, out_name):
             row = [snp] + input_dict[snp][0:3]
             my_writer.writerow(row)
     subprocess.call(
-        f'{plink_path}/plink --bfile {bfile_path} --clump {tsv_plink} --clump-field P --clump-p1 {p} --clump-p2 0.01 --clump-r2 0.1 --clump-snp-field SNP --clump-kb 500 --out {out_plink} --allow-no-sex --allow-extra-chr \
-      2> {out_name}/PLINK_clumping.log',
+        f'{plink_path}/plink --bfile {bfile_path} --clump {tsv_plink} --clump-field P --clump-p1 {p} --clump-p2 0.01 '
+        f'--clump-r2 0.1 --clump-snp-field SNP --clump-kb 500 --out {out_plink} --allow-no-sex --allow-extra-chr 2> '
+        f'{out_name}/PLINK_clumping.log',
         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # subprocess.call(f'md5sum {out_plink}.clumped', shell=True)
     return out_plink + ".clumped"
@@ -156,17 +157,13 @@ if __name__ == '__main__':
     json_files = args.universe
     p_cutoffs = [float(x) for x in args.p]
     out_name = args.out
+    check_and_create_dir(out_name)
+
     if col_names is None:
         col_names = ["chr", "pos", "id", "p"]
     log_message(f'Reading input file {tsv_file}...')
     input_dict = get_snp_info(tsv_file, col_names)
 
-    if os.path.exists(out_name):
-        log_message(f'Output diretory {out_name} exists, writing there...', msg_type="WARN")
-        # shutil.rmtree(out_name)
-    else:
-        log_message(f'Creating directory {out_name} and writing there...', msg_type="WARN")
-        os.makedirs(out_name)
 
     for universe_file in json_files:
         universe_name = os.path.basename(universe_file).replace('.json', '')
@@ -192,7 +189,8 @@ if __name__ == '__main__':
             make_bed_file(clumped_file, interval, out_name)
             n_intervals = count_lines(f'{out_name}/merged_with_line_numbers.bed')
             target_features = get_overlapping_features(f"{out_name}/merged_with_line_numbers.bed",
-                                                       f'{out_name}/features.bed', f"{out_name}/inter.tsv")
+                                                       f'{out_name}/features.bed',
+                                                       f"{out_name}/inter.tsv")
             feature_set = universe["gene_set_dict"]
             interval_counts = count_intervals(feature_set, target_features)
 
