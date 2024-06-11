@@ -24,12 +24,25 @@ def current_random():
     return f"{cur_time}_{random.randint(1, cur_time)}"
 
 
-def create_universe(snp2chrom_pos: Dict[Tuple], interval: int, universe_out='universe.bed', tmp_file='tmp.bed') -> None:
+def create_universe(snp2chrom_pos: Dict[str, Tuple],
+                    interval: int,
+                    universe_out:str ='universe.bed',
+                    tmp_file:str='tmp.bed') -> None:
+    """
+    Creates a universe of genomic intervals based on SNP positions and a specified interval size, outputs to a BED file.
+    This function writes SNP intervals to a temporary file, sorts them, and outputs to a final BED file.
+    The temporary file is deleted after use.
+
+
+    :param snp2chrom_pos: (Dict[str, Tuple[str, int]]): Dictionary mapping SNP identifiers to tuples of chromosome and position.
+    :param interval: (int): The interval size to extend around each SNP position, both upstream and downstream.
+    :param universe_out: (str): The output path for the final sorted BED file. Defaults to 'universe.bed'.
+    :param tmp_file: (str): The path for the temporary BED file used for sorting. Defaults to 'tmp.bed'.
+
+    """
     with open(tmp_file, 'w', newline='') as bed_file:  # Here we write to new file
         bed_writer = csv.writer(bed_file, delimiter='\t')
-        cur_id = 1
-        for snp in snp2chrom_pos:
-            chrom, pos = snp2chrom_pos[snp]
+        for cur_id, (snp, (chrom, pos)) in enumerate(snp2chrom_pos.items()):
             start = max(0, int(pos) - interval)
             end = int(pos) + interval
             # Chromosome, start, end coordinates, id
@@ -38,9 +51,11 @@ def create_universe(snp2chrom_pos: Dict[Tuple], interval: int, universe_out='uni
                        end,
                        cur_id]
             bed_writer.writerow(bed_row)
-            cur_id += 1
-    subprocess.call(f"sort -k1,1 -k2,2n {tmp_file} > {universe_out}", shell=True)
-
+    try:
+        subprocess.call(f"sort -k1,1 -k2,2n {tmp_file} > {universe_out}", shell=True)
+    finally:
+        # Clean up the temporary file
+        os.remove(tmp_file)
 
 
 if __name__ == '__main__':
@@ -54,6 +69,14 @@ if __name__ == '__main__':
                         metavar='path',
                         type=str,
                         required=True)
+    parser.add_argument('-vc',
+                        '--variants_colnames',
+                        help='List of column names in the order of chromosome, position, and variant ID. '
+                             'Provide exactly three names. Defaults are ("chr", "pos", "id").',
+                        metavar='colname',
+                        nargs=3,
+                        required=False,
+                        default=("chr", "pos", "id"))
     parser.add_argument('-i',
                         '--interval',
                         help='Size of the window around each target variant (Default: 500000)',
@@ -109,6 +132,7 @@ if __name__ == '__main__':
 
     log_message("Read GMT/features input")
     variants = args.variants
+    column_names = args.variants_colnames
     interval = args.interval
     if args.features is not None:
         bed, gmt = args.features
@@ -120,7 +144,8 @@ if __name__ == '__main__':
                                              features_file_name=bed)
 
     log_message("Getting SNPs locations")
-    snp2chrom_pos = get_snp_locations(variants)
+    snp2chrom_pos = get_snp_locations(variants,
+                                      column_names)
     log_message("Creating universe")
     create_universe(snp2chrom_pos,
                     interval,
