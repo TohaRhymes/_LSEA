@@ -333,6 +333,79 @@ if __name__ == '__main__':
             total number of features = {len(universe["features"])};
             feature sets in universe = {len(universe["gene_set_dict"])}""")
 
+        stats_rows = []
+        for p_cutoff in p_cutoffs:
+            output_merged_file = os.path.join(out_name, "merged_with_line_numbers.bed")
+            features_file = os.path.join(out_name, "features.bed")
+            inter_file = os.path.join(out_name, "inter.tsv")
+
+            log_message(f'Calculating enrichment with p-value cutoff = {p_cutoff}')
+            clumped_file = run_plink_clumping(path_to_plink_dir,
+                                              path_to_bfile,
+                                              tsv_file,
+                                              snp2chr_pos_pval,
+                                              p_cutoff,
+                                              p2,
+                                              r2,
+                                              kb,
+                                              out_name)
+            make_bed_file(clumped_file, interval, out_name, output_merged_file)
+            n_intervals = count_lines(output_merged_file)
+            target_features = get_overlapping_features(output_merged_file,
+                                                       features_file,
+                                                       inter_file)  # return gene->[chr:s-e, chr:s-e, ...]
+            feature_set = universe["gene_set_dict"]
+            interval_counts = count_intervals(feature_set, target_features)
+
+            pvals = []
+            # todo CHECKKKK тут в двуз местах interval_counts[key] ТОЧНО ЛИ ВОЗВРАЩАЕТ уже длину ???
+            # поглядеть как раньше
+            for w in sorted(interval_counts, key=lambda item: interval_counts[item], reverse=True):
+                pvals.append(p_val_for_gene_set(universe["universe_intervals_number"],  # intervals in universe
+                                                interval_counts_for_universe[w],  # intervals in this set
+                                                n_intervals,  # significant clumps
+                                                interval_counts[w]  # significant clumps from this set
+                                                )
+                             )
+            # todo instead of fdrcorrection, betted fdr for correlated features (???)
+            qvals = calculate_qvals(pvals)
+
+            with open(os.path.join(out_name, f"{universe_name}_result_{p_cutoff}.tsv"), 'w', newline='') as file:
+                explained_loci = set()
+                feature_names = defaultdict(set)
+                hit_count = 0
+                min_qval = 1
+                result_writer = csv.writer(file, delimiter='\t')
+                result_writer.writerow(["gene_set", "overlapping_loci", "p_value", "q_value", "significance", "description"])
+                for i, w in enumerate(
+                        sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
+                    # todo почему ТРИ?? что за трешхолд такой может тоже в параметры вынести?
+                    significant = len(interval_counts[w]) >= interval_thresh and qvals[i] <= qval_thresh
+                    if significant:
+                        min_qval = min(min_qval, qvals[i])
+                        hit_count += 1
+                        for locus in interval_counts[w]:
+                            explained_loci.add(locus)
+                            feature_names[locus].add(';'.join(interval_counts[w][locus]))
+                    if significant or args.print_all:
+                        row = [w, len(interval_counts[w]), pvals[i], qvals[i], significant, dict(interval_counts[w])]
+                        result_writer.writerow(row)
+                # Calculating number of loci with ambiguous annotations
+                # todo а это вообще нужно?
+                # это же типа саммари для текущего пвала
+                # может както более разумно переименовать?
+                ambiguous_loci = 0
+                for _, feature_set in feature_names.items():
+                    if len(feature_set) > 1:
+                        expanded_set = sum([feature.split(';') for feature in feature_set], [])
+                        feature_count = dict(
+                            Counter(expanded_set))
+                        if max(feature_count.values()) < len(feature_set):
+                            ambiguous_loci += 1
+                unambiguous = len(explained_loci) - ambiguous_loci
+                stats_row = [p_cutoff, n_intervals, len(explained_loci), unambiguous, hit_count, min_qval]
+                stats_rows.append(stats_row)
+
         with open(os.path.join(out_name, f"annotation_stats_{universe_name}.tsv"), 'w', newline='') as stats_file:
             stats_writer = csv.writer(stats_file, delimiter='\t')
             stats_header = ['p_cutoff',
@@ -342,73 +415,6 @@ if __name__ == '__main__':
                             'significant_hits',
                             'min_qval']
             stats_writer.writerow(stats_header)
+            for stats_row in stats_rows:
+                stats_writer.writerow(stats_row)
 
-            for p_cutoff in p_cutoffs:
-                output_merged_file = os.path.join(out_name, "merged_with_line_numbers.bed")
-                features_file = os.path.join(out_name, "features.bed")
-                inter_file = os.path.join(out_name, "inter.tsv")
-
-                log_message(f'Calculating enrichment with p-value cutoff = {p_cutoff}')
-                clumped_file = run_plink_clumping(path_to_plink_dir,
-                                                  path_to_bfile,
-                                                  tsv_file,
-                                                  snp2chr_pos_pval,
-                                                  p_cutoff,
-                                                  p2,
-                                                  r2,
-                                                  kb,
-                                                  out_name)
-                make_bed_file(clumped_file, interval, out_name, output_merged_file)
-                n_intervals = count_lines(output_merged_file)
-                target_features = get_overlapping_features(output_merged_file,
-                                                           features_file,
-                                                           inter_file)  # return gene->[chr:s-e, chr:s-e, ...]
-                feature_set = universe["gene_set_dict"]
-                interval_counts = count_intervals(feature_set, target_features)
-
-                pvals = []
-                # todo CHECKKKK тут в двуз местах interval_counts[key] ТОЧНО ЛИ ВОЗВРАЩАЕТ уже длину ???
-                # поглядеть как раньше
-                for w in sorted(interval_counts, key=lambda item: interval_counts[item], reverse=True):
-                    pvals.append(p_val_for_gene_set(universe["universe_intervals_number"],  # intervals in universe
-                                                    interval_counts_for_universe[w],  # intervals in this set
-                                                    n_intervals,  # significant clumps
-                                                    interval_counts[w]  # significant clumps from this set
-                                                    )
-                                 )
-                # todo instead of fdrcorrection, betted fdr for correlated features (???)
-                qvals = calculate_qvals(pvals)
-
-                with open(os.path.join(out_name, f"{universe_name}_result_{p_cutoff}.tsv"), 'w', newline='') as file:
-                    explained_loci = set()
-                    feature_names = defaultdict(set)
-                    hit_count = 0
-                    min_qval = 1
-                    result_writer = csv.writer(file, delimiter='\t')
-                    result_writer.writerow(["gene_set", "overlapping_loci", "p_value", "q_value", "description"])
-                    for i, w in enumerate(
-                            sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
-                        # todo почему ТРИ?? что за трешхолд такой может тоже в параметры вынести?
-                        if len(interval_counts[w]) >= interval_thresh and qvals[i] <= qval_thresh or args.print_all:
-                            min_qval = min(min_qval, qvals[i])
-                            hit_count += 1
-                            for locus in interval_counts[w]:
-                                explained_loci.add(locus)
-                                feature_names[locus].add(';'.join(interval_counts[w][locus]))
-                            row = [w, len(interval_counts[w]), pvals[i], qvals[i], dict(interval_counts[w])]
-                            result_writer.writerow(row)
-                    # Calculating number of loci with ambiguous annotations
-                    # todo а это вообще нужно?
-                    # это же типа саммари для текущего пвала
-                    # может както более разумно переименовать?
-                    ambiguous_loci = 0
-                    for _, feature_set in feature_names.items():
-                        if len(feature_set) > 1:
-                            expanded_set = sum([feature.split(';') for feature in feature_set], [])
-                            feature_count = dict(
-                                Counter(expanded_set))
-                            if max(feature_count.values()) < len(feature_set):
-                                ambiguous_loci += 1
-                    unambiguous = len(explained_loci) - ambiguous_loci
-                    stats_row = [p_cutoff, n_intervals, len(explained_loci), unambiguous, hit_count, min_qval]
-                    stats_writer.writerow(stats_row)
