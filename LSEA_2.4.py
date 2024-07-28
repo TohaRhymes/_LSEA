@@ -269,13 +269,20 @@ if __name__ == '__main__':
                         metavar='float',
                         type=float,
                         required=False,
-                        default=0.1)
+                        default=0.05)
     parser.add_argument('--interval_count_threshold',
                         '-ict',
                         help='XXXXXXX',  # todo
                         metavar='float',
                         type=int,
                         required=False, default=3)
+    parser.add_argument('--print_all',
+                        '-a',
+                        help='If set, save all pathways to resulting file, otherwise, only significant '
+                             '(passing `qval_threshold` and `interval_count_threshold`)',
+                        action='store_true',
+                        required=False,
+                        default=False)
     # todo add temp files deletion
 
     args = parser.parse_args()
@@ -378,19 +385,22 @@ if __name__ == '__main__':
                     hit_count = 0
                     min_qval = 1
                     result_writer = csv.writer(file, delimiter='\t')
-                    result_writer.writerow(["Gene_set", "Overlapping_loci", "Description", "p-value", "q-value"])
+                    result_writer.writerow(["gene_set", "overlapping_loci", "p_value", "q_value", "description"])
                     for i, w in enumerate(
                             sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
                         # todo почему ТРИ?? что за трешхолд такой может тоже в параметры вынести?
-                        if len(interval_counts[w]) >= 3 and qvals[i] <= qval_thresh:
+                        if len(interval_counts[w]) >= interval_thresh and qvals[i] <= qval_thresh or args.print_all:
                             min_qval = min(min_qval, qvals[i])
                             hit_count += 1
                             for locus in interval_counts[w]:
                                 explained_loci.add(locus)
                                 feature_names[locus].add(';'.join(interval_counts[w][locus]))
-                            row = [w, len(interval_counts[w]), dict(interval_counts[w]), pvals[i], qvals[i]]
+                            row = [w, len(interval_counts[w]), pvals[i], qvals[i], dict(interval_counts[w])]
                             result_writer.writerow(row)
                     # Calculating number of loci with ambiguous annotations
+                    # todo а это вообще нужно?
+                    # это же типа саммари для текущего пвала
+                    # может както более разумно переименовать?
                     ambiguous_loci = 0
                     for _, feature_set in feature_names.items():
                         if len(feature_set) > 1:

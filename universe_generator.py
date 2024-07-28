@@ -26,8 +26,8 @@ def current_random():
 
 def create_universe(snp2chrom_pos: Dict[str, Tuple],
                     interval: int,
-                    universe_out:str ='universe.bed',
-                    tmp_file:str='tmp.bed') -> None:
+                    universe_out: str = 'universe.bed',
+                    tmp_file: str = 'tmp.bed') -> None:
     """
     Creates a universe of genomic intervals based on SNP positions and a specified interval size, outputs to a BED file.
     This function writes SNP intervals to a temporary file, sorts them, and outputs to a final BED file.
@@ -106,11 +106,12 @@ if __name__ == '__main__':
                         type=str,
                         required=True)
     parser.add_argument('-tmp',
-                        '--keep-temp',
+                        '--keep_temp',
                         help='If set, keep temporary files (mostly for debugging) (Default: False)',
-                        type=bool,
+                        action='store_true',
                         required=False,
                         default=False)
+    # todo use keep_tmp in reality
 
     log_message("Processing input")
 
@@ -157,8 +158,7 @@ if __name__ == '__main__':
                                                  inter_file)
     log_message("Count intervals")
     interval_counts_for_universe = count_intervals(set2features,
-                                                   feature2intervals,
-                                                   emit_raw=False)
+                                                   feature2intervals)
 
     log_message("Creating features file")
     feature2pos = read_features_from_bed(bed)
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     with open(out_path, "w") as base:
         json.dump(out_dict, base)
 
-    if args.tmp:
+    if args.keep_temp:
         log_message("Temporary files have not been deleted.")
     else:
         log_message("Deleting temporary files.")
