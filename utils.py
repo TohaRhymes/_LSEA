@@ -7,18 +7,17 @@ from typing import Dict, Tuple, List
 import numpy as np
 
 from datetime import datetime
-import yaml
 
 
 def count_intervals(set2features: Dict, features: Dict) -> Dict:
     """
-    Counts the unique intervals associated with feature sets and optionally emits raw details about
-    which features overlap with which intervals.
+    Counts the unique intervals associated with feature sets.
 
     :param set2features: (dict) A dictionary mapping set names to lists of features (genes).
     :param features: (dict) A dictionary mapping feature names (genes) to their respective intervals.
 
-    :return: (dict) A dictionary where each key is a set name and the value is the count of unique intervals associated with the features in the set.
+    :return: (dict) A dictionary where each key is a set name and the value is the count of unique intervals associated
+    with the features in the set.
     """
     res = {}
     for name, feature_list in set2features.items():
@@ -50,9 +49,9 @@ def get_overlapping_features(path_to_bed: str, path_to_gene_file: str, intersect
     :raises: subprocess.CalledProcessError: If BEDTools fails to execute properly.
     "raises: IOError: If there is an error reading from the intersection file.
     """
-    feature2inetervals = defaultdict(list)  # Gene -> interval id
+    feature2intervals = defaultdict(list)  # Gene -> interval id
     subprocess.call(
-        f"bedtools intersect -a {path_to_bed} -b {path_to_gene_file} -wo | perl -p -e 's/\r//g' > {intersect_file}",
+        f"bedtools intersect -a \"{path_to_bed}\" -b \"{path_to_gene_file}\" -wo | perl -p -e 's/\r//g' > \"{intersect_file}\"",
         shell=True)  # сделать пресорт sort -k1,1 -k2,2n и -sorted
     try:
         with open(intersect_file, 'r', newline='') as inter:  # Our result of clumping (SNPs sets)
@@ -62,11 +61,11 @@ def get_overlapping_features(path_to_bed: str, path_to_gene_file: str, intersect
                 # todo правильные ли берем интервалы 1-2, not 5-6?
                 chrom, start, end, _, _, _, _, gene, _ = row
                 interval_name = f'{chrom}:{start}-{end}'
-                feature2inetervals[gene].append(interval_name)
+                feature2intervals[gene].append(interval_name)
     finally:
         # Remove the intermediate file to clean up
         os.remove(intersect_file)
-    return dict(feature2inetervals)
+    return dict(feature2intervals)
 
 
 def get_snp_locations(tsv_file: str,
@@ -204,3 +203,17 @@ def check_and_create_dir(out_name: str):
     else:
         log_message(f'Creating directory {out_name} and writing there...', msg_type="WARN")
         os.makedirs(out_name)
+
+
+def get_filename_without_extension(file_path:str) -> str:
+    """
+    Cuts  just path and extension of file.
+    :param file_path: path to file in any format.
+    :return: (str) just base name of the file, without path and extension.
+    """
+    # Get the base name of the file (e.g., 'example.txt' from '/path/to/example.txt')
+    base_name = os.path.basename(file_path)
+    # Split the base name and get the first part (e.g., 'example' from 'example.txt')
+    file_name_without_extension = os.path.splitext(base_name)[0]
+    return file_name_without_extension
+

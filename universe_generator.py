@@ -73,13 +73,13 @@ if __name__ == '__main__':
                         '--variants_colnames',
                         help='List of column names in the order of chromosome, position, and variant ID. '
                              'Provide exactly three names. Defaults are ("chr", "pos", "id").',
-                        metavar='colname',
+                        metavar='chr pos id',
                         nargs=3,
                         required=False,
                         default=("chr", "pos", "id"))
     parser.add_argument('-i',
                         '--interval',
-                        help='Size of the window around each target variant (Default: 500000)',
+                        help='Size of the window around each target variant (default: 500000)',
                         metavar='int',
                         type=int,
                         required=False,
@@ -91,7 +91,7 @@ if __name__ == '__main__':
                                      'and feature set description in GMT format. Two file paths separated by space '
                                      'should be provided in the following order: [BED] [GMT]. Cannot be used with '
                                      '--feature_files_dir',
-                                metavar='path',
+                                metavar='path_bed path_gmt',
                                 nargs=2)
     group_features.add_argument('-ffdir',
                                 '--feature_files_dir',
