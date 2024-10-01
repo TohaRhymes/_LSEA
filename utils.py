@@ -99,9 +99,14 @@ def get_snp_locations(tsv_file: str,
                 variant_id = row[idx_variant_id]
             except ValueError:
                 raise ValueError(
-                    f"Problem with: {row}\nCheck that your TSV file's format is correct and all necessary columns are present!")
+                    f"Problem with: {row}\n"
+                    f"Check that your TSV file's format is correct and all necessary columns are present!"
+                )
             except IndexError:
-                raise ValueError("One of the specified columns was not found in the file.")
+                raise ValueError(
+                    f"Problem with: {row}\n"
+                    f"One of the specified columns was not found in the file: {tsv_file}"
+                )
             # Store the data in the dictionary
             snp2chrom_pos[variant_id] = (chrom, pos)
     return dict(snp2chrom_pos)
@@ -205,7 +210,7 @@ def check_and_create_dir(out_name: str):
         os.makedirs(out_name)
 
 
-def get_filename_without_extension(file_path:str) -> str:
+def get_filename_without_extension(file_path: str) -> str:
     """
     Cuts  just path and extension of file.
     :param file_path: path to file in any format.
@@ -216,4 +221,3 @@ def get_filename_without_extension(file_path:str) -> str:
     # Split the base name and get the first part (e.g., 'example' from 'example.txt')
     file_name_without_extension = os.path.splitext(base_name)[0]
     return file_name_without_extension
-
