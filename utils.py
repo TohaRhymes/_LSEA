@@ -66,7 +66,9 @@ def count_intervals(set2features: Dict, features: Dict, return_set: bool = True)
 
 
 # Extract gene names that are in intersection
-def get_overlapping_features(path_to_bed: str, path_to_gene_file: str, intersect_file: str) -> Dict[str, List]:
+def get_overlapping_features(path_to_bed: str,
+                             path_to_gene_file: str,
+                             intersect_file: str) -> Dict[str, List]:
     """
     Computes the intersection of genomic features from a BED file with genes from another gene file,
     extracts overlapping gene names along with their intervals, and returns a dictionary mapping each gene
