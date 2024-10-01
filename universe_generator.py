@@ -121,7 +121,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     log_message("Processing output dir")
-    out_path = args.o
+    out_path = args.out_json
     out_dir = os.path.dirname(out_path)
     check_and_create_dir(out_dir)
     # temp files
