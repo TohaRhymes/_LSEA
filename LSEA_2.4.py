@@ -61,7 +61,7 @@ def run_plink_clumping(plink_path: str,
         f'--clump-p1 {p1} '  # Significance threshold for index SNPs
         f'--clump-p2 {p2} '  # Secondary significance threshold for clumped SNPs
         f'--clump-r2 {r2} '  # LD threshold for clumping
-        f'--clump-kb {kb}'  # Physical distance threshold for clumping
+        f'--clump-kb {kb} '  # Physical distance threshold for clumping
         f'--clump-snp-field SNP '
         f'--out \"{out_plink}\" '
         f'--allow-no-sex '
@@ -292,7 +292,7 @@ if __name__ == '__main__':
     for arg in vars(args):
         value = getattr(args, arg)
         if value is not None:
-            full_command += f"--{arg} {value}"
+            full_command += f"--{arg} {value}\n"
     log_message(full_command)
 
     tsv_file = args.input
@@ -351,7 +351,10 @@ if __name__ == '__main__':
                                               kb=kb,
                                               out_name=out_name)
 
-            make_bed_file(clumped_file, interval, out_name, output_merged_file)
+            make_bed_file(clumped_file=clumped_file,
+                          interval=interval,
+                          out_name=out_name,
+                          output_merged_file=output_merged_file)
             n_intervals = count_lines(output_merged_file)
             target_features = get_overlapping_features(output_merged_file,
                                                        features_file,
