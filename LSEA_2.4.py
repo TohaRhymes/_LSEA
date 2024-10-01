@@ -390,6 +390,7 @@ if __name__ == '__main__':
                         hit_count += 1
                         for locus in interval_counts[w]:
                             explained_loci.add(locus)
+                            # todo add instead of joining with ';' and then splitting, directly store set , but wisely
                             feature_names[locus].add(';'.join(interval_counts[w][locus]))
                     if significant or args.print_all:
                         row = [w, len(interval_counts[w]), pvals[i], qvals[i], significant, dict(interval_counts[w])]
@@ -397,6 +398,7 @@ if __name__ == '__main__':
                 # Calculating number of loci with ambiguous annotations
                 # todo а это вообще нужно?
                 # если не нужно -- смело меняем снова в interval_counts на длины, вместо полного списка:)
+                # и не создаем feature_names[locus]
                 # это же типа саммари для текущего пвала
                 # может както более разумно переименовать?
                 ambiguous_loci = 0

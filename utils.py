@@ -22,11 +22,12 @@ def count_intervals(set2features: Dict, features: Dict, return_set: bool = True)
     """
     res = {}
     for name, feature_list in set2features.items():
-        interval_set = set()
+        interval_set = defaultdict(set)
         # Aggregate all intervals for the features listed under the current set name
         for feature in feature_list:
             if feature in features:
-                interval_set.update(features[feature])  # Add all intervals associated with the feature
+                for target_interval in features[feature]:
+                    interval_set[target_interval].add(feature)  # Add all intervals associated with the feature
         if return_set:
             # Store unique intervals themselves
             res[name] = interval_set
@@ -34,6 +35,34 @@ def count_intervals(set2features: Dict, features: Dict, return_set: bool = True)
             # Store the count of unique intervals
             res[name] = len(interval_set)
     return res
+
+
+# todo here is old version with set (or even just length)
+# def count_intervals(set2features: Dict, features: Dict, return_set: bool = True) -> Dict:
+#     """
+#     Counts the unique intervals associated with feature sets.
+#
+#     :param set2features: (dict) A dictionary mapping set names to lists of features (genes).
+#     :param features: (dict) A dictionary mapping feature names (genes) to their respective intervals.
+#     :param return_set: (bool) A flag, which indicates type of returned dict (counts of intervals, or intervals themselves)
+#
+#     :return: (dict) A dictionary where each key is a set name and the value is unique intervals associated
+#     with the features in the set (if return_set is set to true), or count of intervals (if return_set is set to true).
+#     """
+#     res = {}
+#     for name, feature_list in set2features.items():
+#         interval_set = set()
+#         # Aggregate all intervals for the features listed under the current set name
+#         for feature in feature_list:
+#             if feature in features:
+#                 interval_set.update(features[feature])  # Add all intervals associated with the feature
+#         if return_set:
+#             # Store unique intervals themselves
+#             res[name] = interval_set
+#         else:
+#             # Store the count of unique intervals
+#             res[name] = len(interval_set)
+#     return res
 
 
 # Extract gene names that are in intersection
