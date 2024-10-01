@@ -22,18 +22,18 @@ def count_intervals(set2features: Dict, features: Dict, return_set: bool = True)
     """
     res = {}
     for name, feature_list in set2features.items():
-        interval_set = defaultdict(set)
+        interval_dict = defaultdict(set)
         # Aggregate all intervals for the features listed under the current set name
         for feature in feature_list:
             if feature in features:
                 for target_interval in features[feature]:
-                    interval_set[target_interval].add(feature)  # Add all intervals associated with the feature
+                    interval_dict[target_interval].add(feature)  # Add all intervals associated with the feature
         if return_set:
             # Store unique intervals themselves
-            res[name] = interval_set
+            res[name] = interval_dict
         else:
             # Store the count of unique intervals
-            res[name] = len(interval_set)
+            res[name] = len(interval_dict)
     return res
 
 
