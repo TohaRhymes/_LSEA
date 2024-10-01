@@ -2,11 +2,9 @@
 
 import argparse
 import subprocess
-import sys
 import os
 import csv
 import json
-import shutil
 from collections import defaultdict, Counter
 from typing import Dict, List
 
@@ -36,6 +34,7 @@ def run_plink_clumping(plink_path: str,
     :param out_name:
     :return:
     """
+    # todo Write docs for this f'n
     tsv_plink = os.path.join(out_name,
                              f'{get_filename_without_extension(tsv_file)}_for_plink.tsv')
     out_plink = os.path.join(out_name,
@@ -49,7 +48,6 @@ def run_plink_clumping(plink_path: str,
             # Only extract necessary info from dictionary corresponding to csv
             snp_info_row = [snp] + values[:3]
             tsv_writer.writerow(snp_info_row)
-    # todo more params, instead of hardcode: p1, p2, r2, kb
     # The clumping procedure takes all SNPs that are significant at threshold p1 that have not already been clumped
     # (denoting these as index SNPs) and forms clumps of all other SNPs that are within a certain kb distance from the
     # index SNP (default 250kb) and that are in linkage disequilibrium with the index SNP,
@@ -81,6 +79,7 @@ def get_snp_info_from_tsv(tsv_file: str, names: List[str]) -> Dict[str, List[str
     :param names:
     :return:
     """
+    # todo Write docs for this f'n
     input_dict = defaultdict(list)
     with open(tsv_file, 'r', newline='') as csvfile:  # Convert tsv to dictionary
         snp_reader = csv.reader(csvfile, delimiter='\t')
@@ -113,6 +112,7 @@ def make_bed_file(clumped_file, interval, out_name, output_merged_file):
     :param out_name:
     :return:
     """
+    # todo Write docs for this f'n
     clumps_file = os.path.join(out_name, "clumps.bed")
     sorted_file = os.path.join(out_name, "clumps_sorted.bed")
     merged_file = os.path.join(out_name, "merged.bed")
@@ -189,9 +189,9 @@ if __name__ == '__main__':
                         required=True)
     parser.add_argument('--column_names',
                         '-cols',  # was: -column_names
-                        help='Column names for input TSV.'
+                        help='Column names for input TSV. '
                              'Names should be given in this order, separated by space: '
-                             'chromosome, position, ID, p-value',
+                             'chromosome, position, ID, p-value.',
                         metavar='chr pos id p',
                         nargs=4,
                         type=str,
@@ -215,7 +215,7 @@ if __name__ == '__main__':
     parser.add_argument('--clump_p1',
                         '-с_p',  # was: -p
                         help='p-value cutoff to be used when identifying associated loci '
-                             '(corresponds to `--clump-p1` flag in PLINK).'
+                             '(corresponds to `--clump-p1` flag in PLINK). '
                              'If not specified, optimal cutoff will be estimated using a regression model '
                              '(from default: 1e-5 and 5e-8).',  # todo CHECKKK THIS IS TRUE?
                         metavar='float',
@@ -225,17 +225,17 @@ if __name__ == '__main__':
                         default=['1e-5', '5e-8'])
     parser.add_argument('--clump_p2',
                         '-с_p2',
-                        help='Secondary significance threshold for clumped SNPs'
-                             '(corresponds to `--clump-p2` flag in PLINK).'
-                             'Default: 0.01',
+                        help='Secondary significance threshold for clumped SNPs '
+                             '(corresponds to `--clump-p2` flag in PLINK). '
+                             'Default: 0.01.',
                         metavar='float',
                         type=float,
                         required=False,
                         default=0.01)
     parser.add_argument('--clump_r2',
                         '-с_r2',
-                        help='LD threshold for clumping'
-                             '(corresponds to `--clump-r2` flag in PLINK).'
+                        help='LD threshold for clumping '
+                             '(corresponds to `--clump-r2` flag in PLINK). '
                              'Default: 0.1',
                         metavar='float',
                         type=float,
@@ -243,9 +243,9 @@ if __name__ == '__main__':
                         default=0.1)
     parser.add_argument('--clump_kb',
                         '-с_kb',
-                        help='Physical distance threshold for clumping'
-                             '(corresponds to `--clump-kb` flag in PLINK).'
-                             'Default: 500',
+                        help='Physical distance threshold for clumping '
+                             '(corresponds to `--clump-kb` flag in PLINK). '
+                             'Default: 500.',
                         metavar='int',
                         type=int,
                         required=False,
@@ -275,7 +275,8 @@ if __name__ == '__main__':
                         help='XXXXXXX',  # todo
                         metavar='float',
                         type=int,
-                        required=False, default=3)
+                        required=False,
+                        default=3)
     parser.add_argument('--print_all',
                         '-a',
                         help='If set, save all pathways to resulting file, otherwise, only significant '
@@ -340,15 +341,16 @@ if __name__ == '__main__':
             inter_file = os.path.join(out_name, "inter.tsv")
 
             log_message(f'Calculating enrichment with p-value cutoff = {p_cutoff}')
-            clumped_file = run_plink_clumping(path_to_plink_dir,
-                                              path_to_bfile,
-                                              tsv_file,
-                                              snp2chr_pos_pval,
-                                              p_cutoff,
-                                              p2,
-                                              r2,
-                                              kb,
-                                              out_name)
+            clumped_file = run_plink_clumping(plink_path=path_to_plink_dir,
+                                              bfile_path=path_to_bfile,
+                                              tsv_file=tsv_file,
+                                              input_dict=snp2chr_pos_pval,
+                                              p1=p_cutoff,
+                                              p2=p2,
+                                              r2=r2,
+                                              kb=kb,
+                                              out_name=out_name)
+
             make_bed_file(clumped_file, interval, out_name, output_merged_file)
             n_intervals = count_lines(output_merged_file)
             target_features = get_overlapping_features(output_merged_file,
@@ -358,8 +360,6 @@ if __name__ == '__main__':
             interval_counts = count_intervals(feature_set, target_features)
 
             pvals = []
-            # todo CHECKKKK тут в двуз местах interval_counts[key] ТОЧНО ЛИ ВОЗВРАЩАЕТ уже длину ???
-            # поглядеть как раньше
             for w in sorted(interval_counts, key=lambda item: interval_counts[item], reverse=True):
                 pvals.append(p_val_for_gene_set(universe["universe_intervals_number"],  # intervals in universe
                                                 interval_counts_for_universe[w],  # intervals in this set
@@ -376,10 +376,10 @@ if __name__ == '__main__':
                 hit_count = 0
                 min_qval = 1
                 result_writer = csv.writer(file, delimiter='\t')
-                result_writer.writerow(["gene_set", "overlapping_loci", "p_value", "q_value", "significance", "description"])
+                result_writer.writerow(
+                    ["gene_set", "overlapping_loci", "p_value", "q_value", "significance", "description"])
                 for i, w in enumerate(
                         sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
-                    # todo почему ТРИ?? что за трешхолд такой может тоже в параметры вынести?
                     significant = len(interval_counts[w]) >= interval_thresh and qvals[i] <= qval_thresh
                     if significant:
                         min_qval = min(min_qval, qvals[i])
@@ -398,11 +398,11 @@ if __name__ == '__main__':
                 for _, feature_set in feature_names.items():
                     if len(feature_set) > 1:
                         expanded_set = sum([feature.split(';') for feature in feature_set], [])
-                        feature_count = dict(
-                            Counter(expanded_set))
+                        feature_count = dict(Counter(expanded_set))
                         if max(feature_count.values()) < len(feature_set):
                             ambiguous_loci += 1
                 unambiguous = len(explained_loci) - ambiguous_loci
+                # Combining result
                 stats_row = [p_cutoff, n_intervals, len(explained_loci), unambiguous, hit_count, min_qval]
                 stats_rows.append(stats_row)
 
@@ -417,4 +417,3 @@ if __name__ == '__main__':
             stats_writer.writerow(stats_header)
             for stats_row in stats_rows:
                 stats_writer.writerow(stats_row)
-
