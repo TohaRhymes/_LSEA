@@ -360,14 +360,16 @@ if __name__ == '__main__':
                                                        features_file,
                                                        inter_file)  # return gene->[chr:s-e, chr:s-e, ...]
             feature_set = universe["gene_set_dict"]
-            interval_counts = count_intervals(feature_set, target_features)
+            interval_counts = count_intervals(set2features=feature_set,
+                                              features=target_features,
+                                              return_set=True)
 
             pvals = []
-            for w in sorted(interval_counts, key=lambda item: interval_counts[item], reverse=True):
+            for w in sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True):
                 pvals.append(p_val_for_gene_set(universe["universe_intervals_number"],  # intervals in universe
                                                 interval_counts_for_universe[w],  # intervals in this set
                                                 n_intervals,  # significant clumps
-                                                interval_counts[w]  # significant clumps from this set
+                                                len(interval_counts[w])  # significant clumps from this set
                                                 )
                              )
             # todo instead of fdrcorrection, betted fdr for correlated features (???)
@@ -381,8 +383,7 @@ if __name__ == '__main__':
                 result_writer = csv.writer(file, delimiter='\t')
                 result_writer.writerow(
                     ["gene_set", "overlapping_loci", "p_value", "q_value", "significance", "description"])
-                for i, w in enumerate(
-                        sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
+                for i, w in enumerate(sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
                     significant = len(interval_counts[w]) >= interval_thresh and qvals[i] <= qval_thresh
                     if significant:
                         min_qval = min(min_qval, qvals[i])
@@ -395,6 +396,7 @@ if __name__ == '__main__':
                         result_writer.writerow(row)
                 # Calculating number of loci with ambiguous annotations
                 # todo а это вообще нужно?
+                # если не нужно -- смело меняем снова в interval_counts на длины, вместо полного списка:)
                 # это же типа саммари для текущего пвала
                 # может както более разумно переименовать?
                 ambiguous_loci = 0

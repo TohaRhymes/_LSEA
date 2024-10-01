@@ -9,15 +9,16 @@ import numpy as np
 from datetime import datetime
 
 
-def count_intervals(set2features: Dict, features: Dict) -> Dict:
+def count_intervals(set2features: Dict, features: Dict, return_set: bool = True) -> Dict:
     """
     Counts the unique intervals associated with feature sets.
 
     :param set2features: (dict) A dictionary mapping set names to lists of features (genes).
     :param features: (dict) A dictionary mapping feature names (genes) to their respective intervals.
+    :param return_set: (bool) A flag, which indicates type of returned dict (counts of intervals, or intervals themselves)
 
-    :return: (dict) A dictionary where each key is a set name and the value is the count of unique intervals associated
-    with the features in the set.
+    :return: (dict) A dictionary where each key is a set name and the value is unique intervals associated
+    with the features in the set (if return_set is set to true), or count of intervals (if return_set is set to true).
     """
     res = {}
     for name, feature_list in set2features.items():
@@ -26,9 +27,12 @@ def count_intervals(set2features: Dict, features: Dict) -> Dict:
         for feature in feature_list:
             if feature in features:
                 interval_set.update(features[feature])  # Add all intervals associated with the feature
-
-        # Store the count of unique intervals
-        res[name] = len(interval_set)
+        if return_set:
+            # Store unique intervals themselves
+            res[name] = interval_set
+        else:
+            # Store the count of unique intervals
+            res[name] = len(interval_set)
     return res
 
 

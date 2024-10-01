@@ -158,7 +158,8 @@ if __name__ == '__main__':
                                                  inter_file)
     log_message("Count intervals")
     interval_counts_for_universe = count_intervals(set2features,
-                                                   feature2intervals)
+                                                   feature2intervals,
+                                                   return_set=False)
 
     log_message("Creating features file")
     feature2pos = read_features_from_bed(bed)
