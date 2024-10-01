@@ -93,10 +93,10 @@ def get_snp_info_from_tsv(tsv_file: str, names: List[str]) -> Dict[str, List[str
             raise ValueError("Check that your tsv file has headers and they are correct!")
         for snp_info_row in snp_reader:  # Start from second row
             try:
-                # Name -> Chr, pos, pval
-                input_dict[snp_info_row[id_index]].extend(snp_info_row[chr_index])
-                input_dict[snp_info_row[id_index]].extend(snp_info_row[pos_index])
-                input_dict[snp_info_row[id_index]].extend(snp_info_row[p_index])
+                # Name -> chr, pos, pval
+                input_dict[snp_info_row[id_index]] = [snp_info_row[chr_index],
+                                                      snp_info_row[pos_index],
+                                                      snp_info_row[p_index]]
             except IndexError:
                 raise IndexError(f"Error in string: {snp_info_row}. It s")
     return dict(input_dict)
