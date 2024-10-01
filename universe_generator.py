@@ -177,7 +177,8 @@ if __name__ == '__main__':
     else:
         log_message("Deleting temporary files.")
         os.remove(universe_file)
-        os.remove(tmp_file)
-        os.remove(inter_file)
-        os.remove(features_bed)
+        # os.remove(tmp_file) # deleted in functions above
+        # os.remove(inter_file) # deleted in functions above
+        if args.features is None:
+            os.remove(features_bed)
     log_message("Finished!")

@@ -203,7 +203,7 @@ def check_and_create_dir(out_name: str):
     :param out_name: (str) The directory path to check or create.
     """
     if os.path.exists(out_name):
-        log_message(f'Output diretory {out_name} exists, writing there (files can be rewrote)...', msg_type="WARN")
+        log_message(f'Output diretory {out_name} exists, writing there (files can be  overwritten)...', msg_type="WARN")
         # shutil.rmtree(out_name)
     else:
         log_message(f'Creating directory {out_name} and writing there...', msg_type="WARN")
