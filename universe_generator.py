@@ -11,6 +11,7 @@ from typing import Tuple, Dict
 from utils import get_snp_locations, get_overlapping_features, count_intervals, get_features_from_dir, \
     read_features_from_bed, read_gmt, log_message, check_and_create_dir
 
+from tqdm import tqdm
 import time
 import random
 
@@ -42,7 +43,7 @@ def create_universe(snp2chrom_pos: Dict[str, Tuple],
     """
     with open(tmp_file, 'w', newline='') as bed_file:  # Here we write to new file
         bed_writer = csv.writer(bed_file, delimiter='\t')
-        for cur_id, (snp, (chrom, pos)) in enumerate(snp2chrom_pos.items()):
+        for cur_id, (snp, (chrom, pos)) in tqdm(enumerate(snp2chrom_pos.items())):
             start = max(0, int(pos) - interval)
             end = int(pos) + interval
             # Chromosome, start, end coordinates, id
