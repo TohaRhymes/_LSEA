@@ -52,6 +52,7 @@ def create_universe(snp2chrom_pos: Dict[str, Tuple],
                        end,
                        cur_id]
             bed_writer.writerow(bed_row)
+    log_message("Sorting Universe...")
     try:
         subprocess.call(f"sort -k1,1 -k2,2n {tmp_file} > {universe_out}", shell=True)
     finally:
