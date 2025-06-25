@@ -156,12 +156,13 @@ def p_val_for_gene_set(n_big,
                        k):
     """
 
-    :param n_big: features (genes)/intervals in total
+    :param n_big: features (genes)/intervals in total !!
     :param k_big: features (genes) from current set
-    :param n: causal features (genes) in total
+    :param n: causal features (genes) in total !!
     :param k: causal features (genes) from current set
     :return:
     """
+    log_message(f"Args of dist: {k - 1, n_big, k_big, n}")
     return hypergeom.sf(k - 1, n_big, k_big, n)
 
 

@@ -171,7 +171,7 @@ if __name__ == '__main__':
                 "gene_set_dict": set2features,  # todo rename key
                 "features": feature2pos}  # todo rename key
 
-    log_message("Writing to out_path")
+    log_message(f"Writing to {out_path}")
     with open(out_path, "w") as base:
         json.dump(out_dict, base)
 
