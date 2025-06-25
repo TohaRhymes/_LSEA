@@ -383,7 +383,8 @@ if __name__ == '__main__':
                 result_writer = csv.writer(file, delimiter='\t')
                 result_writer.writerow(
                     ["gene_set", "overlapping_loci", "p_value", "q_value", "significance", "description"])
-                for i, w in enumerate(sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
+                for i, w in enumerate(
+                        sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True)):
                     significant = len(interval_counts[w]) >= interval_thresh and qvals[i] <= qval_thresh
                     if significant:
                         min_qval = min(min_qval, qvals[i])

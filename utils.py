@@ -4,8 +4,7 @@ import os
 import subprocess
 from typing import Dict, Tuple, List
 
-import numpy as np
-
+from tqdm import tqdm
 from datetime import datetime
 
 
@@ -21,52 +20,31 @@ def count_intervals(set2features: Dict, features: Dict, return_set: bool = True)
     with the features in the set (if return_set is set to true), or count of intervals (if return_set is set to true).
     """
     res = {}
-    for name, feature_list in set2features.items():
-        interval_dict = defaultdict(set)
-        # Aggregate all intervals for the features listed under the current set name
-        for feature in feature_list:
-            if feature in features:
-                for target_interval in features[feature]:
-                    interval_dict[target_interval].add(feature)  # Add all intervals associated with the feature
+    for name, feature_list in tqdm(set2features.items()):
         if return_set:
-            # Store unique intervals themselves
-            res[name] = interval_dict
+            interval_dict = defaultdict(set)
+            # Aggregate all intervals for the features listed under the current set name
+            for feature in feature_list:
+                if feature in features:
+                    for target_interval in features[feature]:
+                        interval_dict[target_interval].add(feature)  # Add all intervals associated with the feature
+
+                # Store unique intervals themselves
+                res[name] = interval_dict
         else:
+            interval_set = set()
+            # Aggregate all intervals for the features listed under the current set name
+            for feature in feature_list:
+                if feature in features:
+                    interval_set.update(features[feature])  # Add all intervals associated with the feature
             # Store the count of unique intervals
-            res[name] = len(interval_dict)
+            res[name] = len(interval_set)
     return res
 
-
-# todo here is old version with set (or even just length)
-# def count_intervals(set2features: Dict, features: Dict, return_set: bool = True) -> Dict:
-#     """
-#     Counts the unique intervals associated with feature sets.
-#
-#     :param set2features: (dict) A dictionary mapping set names to lists of features (genes).
-#     :param features: (dict) A dictionary mapping feature names (genes) to their respective intervals.
-#     :param return_set: (bool) A flag, which indicates type of returned dict (counts of intervals, or intervals themselves)
-#
-#     :return: (dict) A dictionary where each key is a set name and the value is unique intervals associated
-#     with the features in the set (if return_set is set to true), or count of intervals (if return_set is set to true).
-#     """
-#     res = {}
-#     for name, feature_list in set2features.items():
-#         interval_set = set()
-#         # Aggregate all intervals for the features listed under the current set name
-#         for feature in feature_list:
-#             if feature in features:
-#                 interval_set.update(features[feature])  # Add all intervals associated with the feature
-#         if return_set:
-#             # Store unique intervals themselves
-#             res[name] = interval_set
-#         else:
-#             # Store the count of unique intervals
-#             res[name] = len(interval_set)
-#     return res
-
-
 # Extract gene names that are in intersection
-def get_overlapping_features(path_to_bed: str, path_to_gene_file: str, intersect_file: str) -> Dict[str, List]:
+def get_overlapping_features(path_to_bed: str,
+                             path_to_gene_file: str,
+                             intersect_file: str) -> Dict[str, List]:
     """
     Computes the intersection of genomic features from a BED file with genes from another gene file,
     extracts overlapping gene names along with their intervals, and returns a dictionary mapping each gene
@@ -89,7 +67,7 @@ def get_overlapping_features(path_to_bed: str, path_to_gene_file: str, intersect
     try:
         with open(intersect_file, 'r', newline='') as inter:  # Our result of clumping (SNPs sets)
             intersect_reader = csv.reader(inter, delimiter='\t')
-            for row in intersect_reader:
+            for row in tqdm(intersect_reader):
                 # todo ['1', '0', '510177', '1', '1', '11869', '14409', 'DDX11L1', '2540']
                 # todo правильные ли берем интервалы 1-2, not 5-6?
                 chrom, start, end, _, _, _, _, gene, _ = row
@@ -125,7 +103,7 @@ def get_snp_locations(tsv_file: str,
         idx_chrom, idx_pos, idx_variant_id = [header.index(col) for col in column_names]
 
         # Process each row according to the identified column indices
-        for row in snps_reader:
+        for row in tqdm(snps_reader):
             try:
                 chrom = row[idx_chrom]
                 pos = int(row[idx_pos])
@@ -154,7 +132,7 @@ def read_gmt(path: str) -> Dict[str, List]:
     set2features = dict()
     with open(path, 'r', newline='') as db:
         gmt_reader = csv.reader(db, delimiter='\t')
-        for row in gmt_reader:
+        for row in tqdm(gmt_reader):
             gene_set = row[0]
             set2features[gene_set] = row[2:]
     return set2features
@@ -184,7 +162,7 @@ def get_features_from_dir(path: str,
     feature_set_dict = defaultdict(list)
     # write to a consolidated BED file
     with open(features_file_name, 'w') as features_file:
-        for bed in file_set:
+        for bed in tqdm(file_set):
             bed_file = open(os.path.join(path, bed), 'r')
             bed_contents = [x.strip() for x in bed_file.readlines()]
             bed_file.close()
@@ -209,7 +187,7 @@ def read_features_from_bed(path: str) -> Dict[str, List]:
     feature2pos = defaultdict(list)
     with open(path, 'r') as feature_file:
         features = [line.strip().split('\t') for line in feature_file]
-    for feature in features:
+    for feature in tqdm(features):
         feature2pos[feature[3]] = feature
     return dict(feature2pos)
 
