@@ -24,15 +24,19 @@ def run_plink_clumping(plink_path: str,
                        kb: float,
                        out_name: str) -> str:
     """
-    XXXXXXXXXXXXXXXXXX
+    Runs PLINK clumping to group SNPs into LD-based clumps using user-specified parameters.
+    Writes a temporary TSV file for PLINK input, runs PLINK, and returns the path to the resulting .clumped file.
 
-    :param plink_path:
-    :param bfile_path:
-    :param tsv_file:
-    :param input_dict:
-    :param p:
-    :param out_name:
-    :return:
+    :param plink_path: Path to the directory containing the PLINK executable.
+    :param bfile_path: Prefix for PLINK binary genotype files (bed/bim/fam).
+    :param tsv_file: Path to the GWAS summary statistics file (TSV format).
+    :param input_dict: Dictionary mapping SNP IDs to [chromosome, position, p-value].
+    :param p1: Primary significance threshold for index SNPs (--clump-p1).
+    :param p2: Secondary significance threshold for clumped SNPs (--clump-p2).
+    :param r2: LD threshold for clumping (--clump-r2).
+    :param kb: Physical distance threshold for clumping (--clump-kb).
+    :param out_name: Output directory for PLINK results and logs.
+    :return: Path to the resulting .clumped file.
     """
     # todo Write docs for this f'n
     tsv_plink = os.path.join(out_name,
@@ -73,13 +77,14 @@ def run_plink_clumping(plink_path: str,
 
 def get_snp_info_from_tsv(tsv_file: str, names: List[str]) -> Dict[str, List[str]]:
     """
-    XXXXXXXXXXXXXXXXXXXXXX
+    Parses a GWAS summary statistics TSV file and extracts SNP information into a dictionary.
 
-    :param tsv_file:
-    :param names:
-    :return:
+    :param tsv_file: Path to the input TSV file.
+    :param names: List of column names [chromosome, position, ID, p-value].
+    :return: Dictionary mapping SNP IDs to [chromosome, position, p-value].
+    :raises ValueError: If the header is missing or columns are not found.
+    :raises IndexError: If a row is malformed.
     """
-    # todo Write docs for this f'n
     input_dict = defaultdict(list)
     with open(tsv_file, 'r', newline='') as csvfile:  # Convert tsv to dictionary
         snp_reader = csv.reader(csvfile, delimiter='\t')
@@ -104,47 +109,55 @@ def get_snp_info_from_tsv(tsv_file: str, names: List[str]) -> Dict[str, List[str
 
 def make_bed_file(clumped_file, interval, out_name, output_merged_file):
     """
-    XXXXXXXXXXXXXXXXXXXXXXXXXXX
+    Converts PLINK .clumped output into BED intervals, merges overlapping intervals, and re-centers them to fixed size.
+    Adds unique line numbers to each interval for downstream identification.
 
-    :param output_merged_file:
-    :param clumped_file:
-    :param interval:
-    :param out_name:
-    :return:
+    :param clumped_file: Path to the PLINK .clumped file.
+    :param interval: Interval size (bp) to extend around each lead SNP.
+    :param out_name: Output directory for intermediate and final BED files.
+    :param output_merged_file: Path to the final merged BED file with line numbers.
     """
-    # todo Write docs for this f'n
     clumps_file = os.path.join(out_name, "clumps.bed")
     sorted_file = os.path.join(out_name, "clumps_sorted.bed")
     merged_file = os.path.join(out_name, "merged.bed")
     merged_fixed_size_file = os.path.join(out_name, "merged_fixed_size.bed")
+    # Parse the .clumped file and extract lead SNPs, writing intervals around them to a BED file
     with open(clumps_file, 'w', newline='') as bed_file:  # Here we write to new file
         clumps_writer = csv.writer(bed_file, delimiter='\t')
         with open(clumped_file, 'r') as cl_file:  # Our result of clumping (SNPs sets)
             clumped_reader = csv.reader(cl_file, delimiter='\t')
             for clump_info in clumped_reader:
+                # Each line is expected to be a single string, space-separated (PLINK .clumped format)
                 if len(clump_info) != 0:
-                    # todo What to do with NONE?
+                    # todo what to do with None ??
+                    # Remove empty fields and split by spaces
                     clump_info = list(filter(lambda x: len(x) != 0 and x != " ", clump_info[0].split(" ")))
-                    if clump_info[0].lower() == "chr":  # Skip first row
+                    # Skip header or malformed lines
+                    if len(clump_info) < 4 or clump_info[0].lower() == "chr":
+                        log_message(f"Skipping malformed line in PLINK .clumped file: {clump_info}")
                         continue
+                    # clump_info[0]: chromosome, clump_info[3]: position (lead SNP)
+                    # Note: This assumes PLINK .clumped output format is consistent
+                    # todo: assert this assum + assert abovementioned len(clump_info) < 4 corner case
                     bed_row = [clump_info[0], max(int(clump_info[3]) - interval, 0), int(clump_info[3]) + interval]
                     clumps_writer.writerow(bed_row)
-
-    # Sort file
+    # Sort the BED file by chromosome and start position
     subprocess.call(
         f"bedtools sort -i \"{clumps_file}\" > \"{sorted_file}\"", shell=True)
-    # Merge regions
+    # Merge overlapping intervals to avoid double-counting loci
     subprocess.call(
         f"bedtools merge -i \"{sorted_file}\" > \"{merged_file}\"", shell=True)
+    # Re-center merged intervals to fixed size around the midpoint
     with open(merged_fixed_size_file, 'w', newline='') as bed_file:  # Here we write to new file
         fixed_merged_writer = csv.writer(bed_file, delimiter='\t', lineterminator='\n')
         with open(merged_file, 'r', newline='') as inter:
             merged_reader = csv.reader(inter, delimiter='\t')
             for row in merged_reader:
+                # row[0]: chromosome, row[1]: start, row[2]: end
                 middle_point = int(row[1]) + (int(row[2]) - int(row[1])) // 2
                 new_row = [row[0], max(middle_point - interval, 0), middle_point + interval]
                 fixed_merged_writer.writerow(new_row)
-    # Add numeration to intervals
+    # Add unique line numbers to each interval (for downstream tracking)
     subprocess.call(
         "awk {'print $0\"\t\"FNR'}" + f" \"{merged_fixed_size_file}\" > \"{output_merged_file}\"",
         shell=True)
@@ -155,24 +168,36 @@ def p_val_for_gene_set(n_big,
                        n,
                        k):
     """
+    Calculates the enrichment p-value for a gene set using the hypergeometric test.
 
-    :param n_big: features (genes)/intervals in total !!
-    :param k_big: features (genes) from current set
-    :param n: causal features (genes) in total !!
-    :param k: causal features (genes) from current set
-    :return:
+    :param n_big: Total number of intervals in the universe (N).
+    :param k_big: Number of universe intervals overlapping the gene set (K).
+    :param n: Number of significant intervals (from clumping) (n).
+    :param k: Number of significant intervals overlapping the gene set (k).
+    :return: Hypergeometric p-value (float).
     """
     log_message(f"Args of dist: {k - 1, n_big, k_big, n}")
     return hypergeom.sf(k - 1, n_big, k_big, n)
 
 
 def calculate_qvals(pvals):
+    """
+    Applies FDR correction to a list of p-values using the Benjamini-Hochberg procedure.
+
+    :param pvals: List of p-values.
+    :return: List of q-values (FDR-adjusted p-values).
+    """
     # todo other fdr corrections (?)
     return list(fdrcorrection(pvals)[1])
 
 
 def count_lines(filename):
-    """Count the number of lines in a given file."""
+    """
+    Counts the number of lines in a file.
+
+    :param filename: Path to the file.
+    :return: Number of lines (int).
+    """
     with open(filename, 'r') as file_to_count:
         line_count = sum(1 for _ in file_to_count)
     return line_count
@@ -273,7 +298,7 @@ if __name__ == '__main__':
                         default=0.05)
     parser.add_argument('--interval_count_threshold',
                         '-ict',
-                        help='XXXXXXX',  # todo
+                        help='Minimum number of intervals (loci) a gene set must overlap to be reported (default: 3).',
                         metavar='float',
                         type=int,
                         required=False,
@@ -285,8 +310,15 @@ if __name__ == '__main__':
                         action='store_true',
                         required=False,
                         default=False)
+    parser.add_argument('--keep_temp',
+                        '-tmp',
+                        help='If set, keep intermediate files (mostly for debugging). By default, intermediate files are deleted.',
+                        action='store_true',
+                        required=False,
+                        default=False)
     # todo add temp files deletion
 
+    # Parse command-line arguments and log the full command for reproducibility
     args = parser.parse_args()
 
     full_command = 'Running LSEA with the following CMD:\n'
@@ -296,6 +328,7 @@ if __name__ == '__main__':
             full_command += f"--{arg} {value}\n"
     log_message(full_command)
 
+    # Prepare input and output paths
     tsv_file = args.input
     path_to_plink_dir = args.plink_dir
     if path_to_plink_dir is not None:
@@ -314,15 +347,19 @@ if __name__ == '__main__':
     out_name = args.out
     check_and_create_dir(out_name)
 
+    # Step 1: Read GWAS summary statistics and extract SNP info
     log_message(f'Reading input file {tsv_file}...')
     snp2chr_pos_pval = get_snp_info_from_tsv(tsv_file, col_names)
 
+    # Step 2: For each universe (precomputed set of intervals/features)
     for universe_file in json_files:
         universe_name = os.path.basename(universe_file).replace('.json', '')
         log_message(f'Processing universe: {universe_name}')
         universe = json.load(open(universe_file, "r"))
         interval = universe["interval"]
-        with open(os.path.join(out_name, 'features.bed'), 'w') as feature_file:
+        # Write features.bed for intersection (removes 'chr' prefix for consistency)
+        features_bed_path = os.path.join(out_name, 'features.bed')
+        with open(features_bed_path, 'w') as feature_file:
             for feature in universe["features"]:
                 bed_line = '\t'.join(universe["features"][feature])
                 bed_line = bed_line.replace('chr', '')
@@ -336,12 +373,20 @@ if __name__ == '__main__':
             feature sets in universe = {len(universe["gene_set_dict"])}""")
 
         stats_rows = []
+        temp_files = set()
+        # Step 3: For each p-value cutoff, perform clumping and enrichment
         for p_cutoff in p_cutoffs:
             output_merged_file = os.path.join(out_name, "merged_with_line_numbers.bed")
-            features_file = os.path.join(out_name, "features.bed")
+            features_file = features_bed_path
             inter_file = os.path.join(out_name, "inter.tsv")
+            clumps_file = os.path.join(out_name, "clumps.bed")
+            sorted_file = os.path.join(out_name, "clumps_sorted.bed")
+            merged_file = os.path.join(out_name, "merged.bed")
+            merged_fixed_size_file = os.path.join(out_name, "merged_fixed_size.bed")
+            temp_files.update([features_file, inter_file, clumps_file, sorted_file, merged_file, merged_fixed_size_file, output_merged_file])
 
             log_message(f'Calculating enrichment with p-value cutoff = {p_cutoff}')
+            # Run PLINK clumping to identify independent loci
             clumped_file = run_plink_clumping(plink_path=path_to_plink_dir,
                                               bfile_path=path_to_bfile,
                                               tsv_file=tsv_file,
@@ -352,19 +397,24 @@ if __name__ == '__main__':
                                               kb=kb,
                                               out_name=out_name)
 
+            # Build, merge, and re-center intervals around lead SNPs
             make_bed_file(clumped_file=clumped_file,
                           interval=interval,
                           out_name=out_name,
                           output_merged_file=output_merged_file)
+            # Count the number of final intervals (loci)
             n_intervals = count_lines(output_merged_file)
+            # Intersect intervals with features to get overlaps
             target_features = get_overlapping_features(output_merged_file,
                                                        features_file,
                                                        inter_file)  # return gene->[chr:s-e, chr:s-e, ...]
             feature_set = universe["gene_set_dict"]
+            # Count the number of intervals overlapping each gene set
             interval_counts = count_intervals(set2features=feature_set,
                                               features=target_features,
                                               return_set=True)
 
+            # Step 4: Calculate enrichment p-values for each gene set
             pvals = []
             for w in sorted(interval_counts, key=lambda item: len(interval_counts[item]), reverse=True):
                 pvals.append(p_val_for_gene_set(universe["universe_intervals_number"],  # intervals in universe
@@ -373,9 +423,10 @@ if __name__ == '__main__':
                                                 len(interval_counts[w])  # significant clumps from this set
                                                 )
                              )
-            # todo instead of fdrcorrection, betted fdr for correlated features (???)
+            # Apply FDR correction to p-values
             qvals = calculate_qvals(pvals)
 
+            # Step 5: Write results and summary statistics
             with open(os.path.join(out_name, f"{universe_name}_result_{p_cutoff}.tsv"), 'w', newline='') as file:
                 explained_loci = set()
                 feature_names = defaultdict(set)
@@ -393,16 +444,12 @@ if __name__ == '__main__':
                         for locus in interval_counts[w]:
                             explained_loci.add(locus)
                             # todo add instead of joining with ';' and then splitting, directly store set , but wisely
+                            # Note: feature_names is used to track ambiguous loci annotations
                             feature_names[locus].add(';'.join(interval_counts[w][locus]))
                     if significant or args.print_all:
                         row = [w, len(interval_counts[w]), pvals[i], qvals[i], significant, dict(interval_counts[w])]
                         result_writer.writerow(row)
-                # Calculating number of loci with ambiguous annotations
-                # todo а это вообще нужно?
-                # если не нужно -- смело меняем снова в interval_counts на длины, вместо полного списка:)
-                # и не создаем feature_names[locus]
-                # это же типа саммари для текущего пвала
-                # может както более разумно переименовать?
+                # Calculate number of loci with ambiguous annotations (for summary)
                 ambiguous_loci = 0
                 for _, feature_set in feature_names.items():
                     if len(feature_set) > 1:
@@ -411,10 +458,11 @@ if __name__ == '__main__':
                         if max(feature_count.values()) < len(feature_set):
                             ambiguous_loci += 1
                 unambiguous = len(explained_loci) - ambiguous_loci
-                # Combining result
+                # Combine result for summary stats
                 stats_row = [p_cutoff, n_intervals, len(explained_loci), unambiguous, hit_count, min_qval]
                 stats_rows.append(stats_row)
 
+        # Write summary statistics for this universe
         with open(os.path.join(out_name, f"annotation_stats_{universe_name}.tsv"), 'w', newline='') as stats_file:
             stats_writer = csv.writer(stats_file, delimiter='\t')
             stats_header = ['p_cutoff',
@@ -426,3 +474,14 @@ if __name__ == '__main__':
             stats_writer.writerow(stats_header)
             for stats_row in stats_rows:
                 stats_writer.writerow(stats_row)
+        # Clean up intermediate files unless --keep_temp is set
+        if args.keep_temp:
+            log_message("Intermediate files have not been deleted (--keep_temp set).")
+        else:
+            log_message("Deleting intermediate files.")
+            for f in temp_files:
+                try:
+                    if os.path.exists(f):
+                        os.remove(f)
+                except Exception as e:
+                    log_message(f"Failed to delete intermediate file {f}: {e}", msg_type="WARN")

@@ -14,34 +14,27 @@ def count_intervals(set2features: Dict, features: Dict, return_set: bool = True)
 
     :param set2features: (dict) A dictionary mapping set names to lists of features (genes).
     :param features: (dict) A dictionary mapping feature names (genes) to their respective intervals.
-    :param return_set: (bool) A flag, which indicates type of returned dict (counts of intervals, or intervals themselves)
-
-    :return: (dict) A dictionary where each key is a set name and the value is unique intervals associated
-    with the features in the set (if return_set is set to true), or count of intervals (if return_set is set to true).
+    :param return_set: (bool) If True, for each set returns dict: {all associated intervals (key): features, covered by this interval}; if False, returns the count only.
+    :return: (dict) A dictionary where each key is a set name and the value is either the dict of unique intervals (if return_set) or the count.
     """
     res = {}
     for name, feature_list in tqdm(set2features.items()):
         if return_set:
             interval_dict = defaultdict(set)
-            # Aggregate all intervals for the features listed under the current set name
             for feature in feature_list:
                 if feature in features:
                     for target_interval in features[feature]:
-                        interval_dict[target_interval].add(feature)  # Add all intervals associated with the feature
-
-                # Store unique intervals themselves
-                res[name] = interval_dict
+                        interval_dict[target_interval].add(feature)
+            res[name] = interval_dict
         else:
             interval_set = set()
-            # Aggregate all intervals for the features listed under the current set name
             for feature in feature_list:
                 if feature in features:
-                    interval_set.update(features[feature])  # Add all intervals associated with the feature
-            # Store the count of unique intervals
+                    interval_set.update(features[feature])
             res[name] = len(interval_set)
     return res
 
-# Extract gene names that are in intersection
+
 def get_overlapping_features(path_to_bed: str,
                              path_to_gene_file: str,
                              intersect_file: str) -> Dict[str, List]:
@@ -57,25 +50,31 @@ def get_overlapping_features(path_to_bed: str,
     :param intersect_file: (str) The file path where the intersection results will be temporarily stored.
     :return: (dict) A dictionary where keys are gene names and values are lists of interval strings in the
                  format "chromosome:start-end" for each overlap with the genomic features.
-    :raises: subprocess.CalledProcessError: If BEDTools fails to execute properly.
-    "raises: IOError: If there is an error reading from the intersection file.
+    :raises: RuntimeError if BEDTools fails to execute properly.
+    :raises: IOError if there is an error reading from the intersection file.
     """
     feature2intervals = defaultdict(list)  # Gene -> interval id
-    subprocess.call(
-        f"bedtools intersect -a \"{path_to_bed}\" -b \"{path_to_gene_file}\" -wo | perl -p -e 's/\r//g' > \"{intersect_file}\"",
-        shell=True)  # сделать пресорт sort -k1,1 -k2,2n и -sorted
     try:
-        with open(intersect_file, 'r', newline='') as inter:  # Our result of clumping (SNPs sets)
+        ret = subprocess.call(
+            f"bedtools intersect -a \"{path_to_bed}\" -b \"{path_to_gene_file}\" -wo | perl -p -e 's/\r//g' > \"{intersect_file}\"",
+            shell=True)   # todo (??) сделать пресорт sort -k1,1 -k2,2n и -sorted
+        if ret != 0:
+            raise RuntimeError(f"BEDTools intersect failed with exit code {ret}")
+        with open(intersect_file, 'r', newline='') as inter:  # The results of clumping (SNPs sets)
             intersect_reader = csv.reader(inter, delimiter='\t')
             for row in tqdm(intersect_reader):
-                # todo ['1', '0', '510177', '1', '1', '11869', '14409', 'DDX11L1', '2540']
-                # todo правильные ли берем интервалы 1-2, not 5-6?
-                chrom, start, end, _, _, _, _, gene, _ = row
+                if len(row) < 8:
+                    log_message(f"Skipping malformed line: {row} (the structure is not [chrom, start, end, _, _, _, _, gene, _])", msg_type="WARN")
+                    continue  # skip malformed lines
+                chrom, start, end, _, _, _, _, gene, *_ = row
                 interval_name = f'{chrom}:{start}-{end}'
                 feature2intervals[gene].append(interval_name)
+    except Exception as e:
+        raise RuntimeError(f"Error during feature intersection: {e}")
     finally:
         # Remove the intermediate file to clean up
-        os.remove(intersect_file)
+        if os.path.exists(intersect_file):
+            os.remove(intersect_file)
     return dict(feature2intervals)
 
 
@@ -84,6 +83,7 @@ def get_snp_locations(tsv_file: str,
                       ) -> Dict[str, Tuple[str, int]]:
     """
     Extracts SNP locations from a TSV file, relying on a provided list of column names.
+    
     :param tsv_file: (str) The path to the TSV file.
     :param column_names: (List[str]) List of column names in the order of 'chromosome', 'position', and 'variant_id'.
     :return: (dict) A dictionary mapping variant IDs to a tuple of chromosome and position.
@@ -92,14 +92,17 @@ def get_snp_locations(tsv_file: str,
     """
     # the dictionary to store the SNP information
     snp2chrom_pos = defaultdict(tuple)
-
-    # open and read file
+    
+    if not os.path.isfile(tsv_file):
+        raise FileNotFoundError(f"TSV file {tsv_file} not found.")
     with open(tsv_file, 'r', newline='') as csvfile:
-        # Create a CSV reader object
         snps_reader = csv.reader(csvfile, delimiter='\t')
 
         # Read the header and determine column indices
         header = next(snps_reader)
+        for col in column_names:
+            if col not in header:
+                raise ValueError(f"Column '{col}' not found in TSV header!")
         idx_chrom, idx_pos, idx_variant_id = [header.index(col) for col in column_names]
 
         # Process each row according to the identified column indices
@@ -110,29 +113,31 @@ def get_snp_locations(tsv_file: str,
                 variant_id = row[idx_variant_id]
             except ValueError:
                 raise ValueError(
-                    f"Problem with: {row}\n"
-                    f"Check that your TSV file's format is correct and all necessary columns are present!"
-                )
+                    f"Problem with: {row}\nCheck that your TSV file's format is correct and all necessary columns are present (from {column_names})!")
             except IndexError:
                 raise ValueError(
-                    f"Problem with: {row}\n"
-                    f"One of the specified columns was not found in the file: {tsv_file}"
-                )
-            # Store the data in the dictionary
+                    f"Problem with: {row}\nOne of the specified columns was not found in the file: {tsv_file}")
             snp2chrom_pos[variant_id] = (chrom, pos)
     return dict(snp2chrom_pos)
 
 
 def read_gmt(path: str) -> Dict[str, List]:
     """
-    Read GMT file to dict
-    :param path: path to GMT file.
-    :return: Dict {set_name:list_of_features(e.g. genes)}
+    Reads a GMT file and returns a dictionary mapping set names to lists of features.
+    
+    :param path: Path to GMT file.
+    :return: Dict {set_name: list_of_features (e.g. genes)}
+    :raises: FileNotFoundError if the file does not exist.
+    :raises: ValueError if any row does not have at least 3 columns.
     """
     set2features = dict()
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"GMT file {path} not found.")
     with open(path, 'r', newline='') as db:
         gmt_reader = csv.reader(db, delimiter='\t')
-        for row in tqdm(gmt_reader):
+        for i, row in enumerate(tqdm(gmt_reader)):
+            if len(row) < 3:
+                raise ValueError(f"Row {i+1} in GMT file {path} does not have at least 3 columns (gene set, id/link, features (genes))!")
             gene_set = row[0]
             set2features[gene_set] = row[2:]
     return set2features
@@ -159,20 +164,29 @@ def get_features_from_dir(path: str,
         raise FileNotFoundError(f"No directory found at {path}")
     # find all BED files in the specified directory
     file_set = [x for x in os.listdir(path) if x.endswith('.bed')]
+    if not file_set:
+        raise FileNotFoundError(f"No BED files found in directory {path}")
     feature_set_dict = defaultdict(list)
-    # write to a consolidated BED file
-    with open(features_file_name, 'w') as features_file:
-        for bed in tqdm(file_set):
-            bed_file = open(os.path.join(path, bed), 'r')
-            bed_contents = [x.strip() for x in bed_file.readlines()]
-            bed_file.close()
-            # Extract set name from file name
-            set_name = os.path.splitext(bed)[0]
-            for i, bed_entry in enumerate(bed_contents):
-                elems = bed_entry.split('\t')
-                feature_name = f'{set_name}:{i}'
-                features_file.write(f'{elems[0]}\t{elems[1]}\t{elems[2]}\t{feature_name}\n')
-                feature_set_dict[set_name].append(feature_name)
+    try:
+        with open(features_file_name, 'w') as features_file:
+            for bed in tqdm(file_set):
+                bed_path = os.path.join(path, bed)
+                if not os.path.isfile(bed_path):
+                    log_message(f"Skipping missing BED file: {bed_path}", msg_type="WARN")
+                    continue
+                with open(bed_path, 'r') as bed_file:
+                    bed_contents = [x.strip() for x in bed_file.readlines()]
+                set_name = os.path.splitext(bed)[0]
+                for i, bed_entry in enumerate(bed_contents):
+                    elems = bed_entry.split('\t')
+                    if len(elems) < 3:
+                        log_message(f"Skipping malformed line in BED file {bed_path} at line {i+1}", msg_type="WARN")
+                        continue  # skip malformed lines
+                    feature_name = f'{set_name}:{i}'
+                    features_file.write(f'{elems[0]}\t{elems[1]}\t{elems[2]}\t{feature_name}\n')
+                    feature_set_dict[set_name].append(feature_name)
+    except Exception as e:
+        raise IOError(f"Error processing BED files in {path}: {e}")
     return dict(feature_set_dict)
 
 
@@ -185,9 +199,14 @@ def read_features_from_bed(path: str) -> Dict[str, List]:
     :raises FileNotFoundError: If the BED file is not found.
     """
     feature2pos = defaultdict(list)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"BED file {path} not found.")
     with open(path, 'r') as feature_file:
         features = [line.strip().split('\t') for line in feature_file]
     for feature in tqdm(features):
+        if len(feature) < 4:
+            log_message(f"Skipping malformed line in BED file {path} at line {features.index(feature) + 1}", msg_type="WARN")
+            continue  # skip malformed lines
         feature2pos[feature[3]] = feature
     return dict(feature2pos)
 
@@ -199,11 +218,8 @@ def log_message(msg, msg_type="INFO"):
     :param msg: (str) The message to log.
     :param msg_type: (str) The type of message, e.g., "INFO", "WARN". Default is "INFO".
     """
-    # Get current date and time
     now = datetime.now()
-    # Format the current date and time
     formatted_now = now.strftime("%Y-%m-%d %H:%M:%S")
-    # Log the message with date and time
     print(f"[{msg_type} {formatted_now}] {msg}")
 
 
@@ -215,7 +231,6 @@ def check_and_create_dir(out_name: str):
     """
     if os.path.exists(out_name):
         log_message(f'Output diretory {out_name} exists, writing there (files can be  overwritten)...', msg_type="WARN")
-        # shutil.rmtree(out_name)
     else:
         log_message(f'Creating directory {out_name} and writing there...', msg_type="WARN")
         os.makedirs(out_name)
@@ -223,7 +238,7 @@ def check_and_create_dir(out_name: str):
 
 def get_filename_without_extension(file_path: str) -> str:
     """
-    Cuts  just path and extension of file.
+    Cuts just path and extension of file.
     :param file_path: path to file in any format.
     :return: (str) just base name of the file, without path and extension.
     """

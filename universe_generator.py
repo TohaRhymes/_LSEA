@@ -28,7 +28,8 @@ def current_random():
 def create_universe(snp2chrom_pos: Dict[str, Tuple],
                     interval: int,
                     universe_out: str = 'universe.bed',
-                    tmp_file: str = 'tmp.bed') -> None:
+                    tmp_file: str = 'tmp.bed',
+                    keep_temp=False) -> None:
     """
     Creates a universe of genomic intervals based on SNP positions and a specified interval size, outputs to a BED file.
     This function writes SNP intervals to a temporary file, sorts them, and outputs to a final BED file.
@@ -39,25 +40,28 @@ def create_universe(snp2chrom_pos: Dict[str, Tuple],
     :param interval: (int): The interval size to extend around each SNP position, both upstream and downstream.
     :param universe_out: (str): The output path for the final sorted BED file. Defaults to 'universe.bed'.
     :param tmp_file: (str): The path for the temporary BED file used for sorting. Defaults to 'tmp.bed'.
-
+    :raises: OSError if file writing or sorting fails.
     """
-    with open(tmp_file, 'w', newline='') as bed_file:  # Here we write to new file
-        bed_writer = csv.writer(bed_file, delimiter='\t')
-        for cur_id, (snp, (chrom, pos)) in tqdm(enumerate(snp2chrom_pos.items())):
-            start = max(0, int(pos) - interval)
-            end = int(pos) + interval
-            # Chromosome, start, end coordinates, id
-            bed_row = [chrom,
-                       start,
-                       end,
-                       cur_id]
-            bed_writer.writerow(bed_row)
-    log_message("Sorting Universe...")
     try:
-        subprocess.call(f"sort -k1,1 -k2,2n {tmp_file} > {universe_out}", shell=True)
+        with open(tmp_file, 'w', newline='') as bed_file:  # Here we write to new file
+            bed_writer = csv.writer(bed_file, delimiter='\t')
+            for cur_id, (snp, (chrom, pos)) in tqdm(enumerate(snp2chrom_pos.items())):
+                start = max(0, int(pos) - interval)
+                end = int(pos) + interval
+                # Chromosome, start, end coordinates, id
+                bed_row = [chrom, start, end, cur_id]
+                bed_writer.writerow(bed_row)
+        log_message("Sorting Universe...")
+        ret = subprocess.call(f"sort -k1,1 -k2,2n {tmp_file} > {universe_out}", shell=True)
+        if ret != 0:
+            raise RuntimeError(f"Sorting failed with exit code {ret}")
+    except Exception as e:
+        log_message(f"Error during universe creation: {e}", msg_type="ERROR")
+        raise
     finally:
         # Clean up the temporary file
-        os.remove(tmp_file)
+        if os.path.exists(tmp_file) and not keep_temp:
+            os.remove(tmp_file)
 
 
 if __name__ == '__main__':
@@ -137,14 +141,40 @@ if __name__ == '__main__':
     variants = args.variants
     column_names = args.variants_colnames
     interval = args.interval
+    # Validate input files and columns
+    if not os.path.isfile(variants):
+        log_message(f"Variants file {variants} does not exist!", msg_type="ERROR")
+        sys.exit(1)
+    # Validate column names for variants
+    with open(variants, 'r') as f:
+        header = f.readline().strip().split('\t')
+        for col in column_names:
+            if col not in header:
+                log_message(f"Column '{col}' not found in variants file header!", msg_type="ERROR")
+                sys.exit(1)
+    # Validate features/gmt or feature_files_dir
     if args.features is not None:
         bed, gmt = args.features
+        if not os.path.isfile(bed):
+            log_message(f"BED file {bed} does not exist!", msg_type="ERROR")
+            sys.exit(1)
+        if not os.path.isfile(gmt):
+            log_message(f"GMT file {gmt} does not exist!", msg_type="ERROR")
+            sys.exit(1)
+        # Validate GMT format (at least 3 columns per row)
+        with open(gmt, 'r') as gmtf:
+            for i, row in enumerate(gmtf):
+                if len(row.strip().split('\t')) < 3:
+                    log_message(f"Row {i+1} in GMT file {gmt} does not have at least 3 columns!", msg_type="ERROR")
+                    sys.exit(1)
         set2features = read_gmt(gmt)
     else:
         feature_dir = args.feature_files_dir
+        if not os.path.isdir(feature_dir):
+            log_message(f"Feature directory {feature_dir} does not exist!", msg_type="ERROR")
+            sys.exit(1)
         bed = features_bed
-        set2features = get_features_from_dir(feature_dir,
-                                             features_file_name=bed)
+        set2features = get_features_from_dir(feature_dir, features_file_name=bed)
 
     log_message("Getting SNPs locations")
     snp2chrom_pos = get_snp_locations(variants,
@@ -153,7 +183,8 @@ if __name__ == '__main__':
     create_universe(snp2chrom_pos,
                     interval,
                     universe_out=universe_file,
-                    tmp_file=tmp_file)
+                    tmp_file=tmp_file,
+                    keep_temp=args.keep_temp)
     log_message("Get overlaps")
     feature2intervals = get_overlapping_features(universe_file,
                                                  bed,
@@ -172,16 +203,30 @@ if __name__ == '__main__':
                 "features": feature2pos}  # todo rename key
 
     log_message(f"Writing to {out_path}")
-    with open(out_path, "w") as base:
-        json.dump(out_dict, base)
+    # Validate that SNPs were found
+    if not snp2chrom_pos:
+        log_message("No SNPs found in the variants file after parsing!", msg_type="ERROR")
+        sys.exit(1)
+    # Validate that features were found
+    if not feature2pos:
+        log_message("No features found in the BED file after parsing!", msg_type="ERROR")
+        sys.exit(1)
+    try:
+        with open(out_path, "w") as base:
+            json.dump(out_dict, base)
+    except Exception as e:
+        log_message(f"Failed to write output JSON: {e}", msg_type="ERROR")
+        sys.exit(1)
 
+    # Clean up temporary files with error handling
     if args.keep_temp:
         log_message("Temporary files have not been deleted.")
     else:
         log_message("Deleting temporary files.")
-        os.remove(universe_file)
-        # os.remove(tmp_file) # deleted in functions above
-        # os.remove(inter_file) # deleted in functions above
-        if args.features is None:
-            os.remove(features_bed)
+        for f in [universe_file, inter_file, features_bed]:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+            except Exception as e:
+                log_message(f"Failed to delete temporary file {f}: {e}", msg_type="WARN")
     log_message("Finished!")
